@@ -44,7 +44,7 @@ Thumbs.db
 .vite/
 
 # Weather tiles (downloaded during build)
-public/weather-tiles/
+# public/weather-tiles/
 
 # Claude
 .claude
