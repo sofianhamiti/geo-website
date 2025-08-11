@@ -1,0 +1,60 @@
+{
+  "name": "blue-marble-world-map-redesigned",
+  "version": "4.0.0",
+  "description": "Redesigned Blue Marble world map with React, simplified architecture, and modern best practices",
+  "type": "module",
+  "main": "src/main.tsx",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "vite"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.1.0",
+    "@deck.gl/geo-layers": "^9.1.14",
+    "@deck.gl/layers": "^9.1.0",
+    "@deck.gl/mapbox": "^9.1.0",
+    "@types/papaparse": "^5.3.16",
+    "axios": "^1.11.0",
+    "chalk": "^5.5.0",
+    "cli-progress": "^3.12.0",
+    "d3-force": "^3.0.0",
+    "date-fns": "^4.1.0",
+    "fs-extra": "^11.3.1",
+    "maplibre-gl": "^5.0.0",
+    "p-limit": "^6.2.0",
+    "papaparse": "^5.5.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "suncalc": "^1.9.0",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/d3-force": "^3.0.10",
+    "@types/fs-extra": "^11.0.4",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@types/suncalc": "^1.9.2",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.2.2",
+    "vite": "^7.0.6"
+  },
+  "keywords": [
+    "blue-marble",
+    "nasa",
+    "world-map",
+    "maplibre-gl",
+    "react",
+    "typescript",
+    "day-night",
+    "terminator",
+    "timezone"
+  ],
+  "author": "Blue Marble Map Project",
+  "license": "MIT"
+}

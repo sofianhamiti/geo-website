@@ -1,0 +1,83 @@
+name: Build and Deploy Website
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual trigger
+  workflow_dispatch:
+  # Optional: Run daily to refresh weather data
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: npm run build
+      
+    - name: Build summary
+      run: |
+        echo "Build completed successfully!"
+        echo "Build size summary:"
+        du -sh dist/
+        find dist/ -name "*.js" -o -name "*.css" | head -10 | xargs ls -lh
+        
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      uses: actions/configure-pages@v4
+      
+    - name: Upload artifact
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./dist
+        
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      id: deployment
+      uses: actions/deploy-pages@v4
+        
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "## 🌍 Geo Website Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Tool**: Vite + React + TypeScript" >> $GITHUB_STEP_SUMMARY
+        if [ -d "dist" ]; then
+          BUILD_SIZE=$(du -sh dist/ | cut -f1)
+          echo "- **Build Size**: $BUILD_SIZE" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "${{ job.status }}" == "success" && "${{ github.ref }}" == "refs/heads/main" ]; then
+          echo "- **Status**: ✅ Successfully deployed to GitHub Pages" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ job.status }}" == "success" ]; then
+          echo "- **Status**: ✅ Build successful (PR preview)" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status**: ❌ Build failed" >> $GITHUB_STEP_SUMMARY
+        fi
