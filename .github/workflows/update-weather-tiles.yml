@@ -1,0 +1,86 @@
+name: Update Weather Tiles
+
+on:
+  # Run every 12 hours to refresh weather tiles
+  schedule:
+    - cron: '0 6,18 * * *'  # 6 AM and 6 PM UTC
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Need write access to commit tiles back to repo
+
+jobs:
+  update-weather-tiles:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Download fresh weather tiles
+      env:
+        VITE_OPENWEATHER_API_KEY: ${{ secrets.VITE_OPENWEATHER_API_KEY }}
+      run: |
+        echo "🌦️ Downloading fresh weather tiles..."
+        
+        # Create tiles directory
+        mkdir -p public/weather-tiles
+        
+        # Run the weather tile download script
+        npm run download-tiles
+        
+        # Verify tiles were downloaded
+        if [ -d "public/weather-tiles" ] && [ "$(ls -A public/weather-tiles)" ]; then
+          TILE_COUNT=$(find public/weather-tiles -name "*.png" | wc -l)
+          echo "✅ Downloaded $TILE_COUNT weather tiles"
+          echo "📊 Tile storage size: $(du -sh public/weather-tiles | cut -f1)"
+        else
+          echo "❌ No weather tiles found"
+          exit 1
+        fi
+        
+    - name: Commit updated tiles
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add weather tiles to git
+        git add public/weather-tiles/
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "🔄 No new weather data to commit"
+        else
+          git commit -m "🌦️ Update weather tiles - $(date '+%Y-%m-%d %H:%M UTC')"
+          git push
+          echo "✅ Weather tiles updated and committed"
+        fi
+        
+    - name: Weather Update Summary
+      if: always()
+      run: |
+        echo "## 🌦️ Weather Tiles Update Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Time**: $(date '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+        if [ -d "public/weather-tiles" ]; then
+          TILE_COUNT=$(find public/weather-tiles -name "*.png" | wc -l 2>/dev/null || echo "0")
+          TILE_SIZE=$(du -sh public/weather-tiles 2>/dev/null | cut -f1 || echo "0B")
+          echo "- **Tiles Downloaded**: $TILE_COUNT files" >> $GITHUB_STEP_SUMMARY
+          echo "- **Storage Used**: $TILE_SIZE" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "- **Status**: ✅ Weather tiles updated successfully" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status**: ❌ Weather tile update failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "- **Next Update**: $(date -d '+12 hours' '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY

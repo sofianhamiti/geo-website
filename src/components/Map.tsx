@@ -52,8 +52,13 @@ const Map = () => {
     loadSavedCities();
     
     // Load the real weather timestamp immediately from metadata
-    fetch('/weather-tiles/metadata.json')
-      .then(response => response.json())
+    const metadataUrl = './weather-tiles/metadata.json';
+    console.log('🌦️ Loading weather timestamp on mount from:', metadataUrl);
+    fetch(metadataUrl)
+      .then(response => {
+        console.log('🌦️ Mount metadata response:', response.status, response.url);
+        return response.json();
+      })
       .then(metadata => {
         if (metadata.lastUpdate) {
           const realTimestamp = new Date(metadata.lastUpdate);

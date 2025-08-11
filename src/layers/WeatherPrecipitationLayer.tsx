@@ -60,11 +60,17 @@ export async function createWeatherPrecipitationLayer(): Promise<{ layers: Bitma
     let realTimestamp: Date;
     
     try {
-      console.log('🌦️ Loading weather tile metadata...');
-      const response = await fetch('/weather-tiles/metadata.json');
+      const metadataUrl = './weather-tiles/metadata.json';
+      console.log('🌦️ Loading weather tile metadata from:', metadataUrl);
+      console.log('🌦️ Current location:', window.location.href);
+      console.log('🌦️ Base URL:', window.location.origin + window.location.pathname);
+      
+      const response = await fetch(metadataUrl);
+      console.log('🌦️ Metadata response status:', response.status, response.statusText);
+      console.log('🌦️ Metadata response URL:', response.url);
       
       if (!response.ok) {
-        throw new Error(`Metadata fetch failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Metadata fetch failed: ${response.status} ${response.statusText} at ${response.url}`);
       }
       
       const metadata: WeatherTileMetadata = await response.json();
@@ -92,10 +98,12 @@ export async function createWeatherPrecipitationLayer(): Promise<{ layers: Bitma
 
     // Test if a sample tile exists
     try {
-      const testTileUrl = `/weather-tiles/${currentTileset}/8/8.png`;
+      const testTileUrl = `./weather-tiles/${currentTileset}/8/8.png`;
+      console.log('🌦️ Testing sample tile at:', testTileUrl);
       const testResponse = await fetch(testTileUrl, { method: 'HEAD' });
+      console.log('🌦️ Sample tile response:', testResponse.status, testResponse.url);
       if (!testResponse.ok) {
-        console.warn(`⚠️  Sample tile not found at ${testTileUrl}`);
+        console.warn(`⚠️  Sample tile not found at ${testTileUrl} (${testResponse.status})`);
       } else {
         console.log('✅ Sample tile verified - tileset appears valid');
       }
@@ -116,7 +124,7 @@ export async function createWeatherPrecipitationLayer(): Promise<{ layers: Bitma
         const bounds = tileToGeoBounds(x, y, 4); // Using zoom level 4
         const [west, south, east, north] = bounds;
         
-        const tileUrl = `/weather-tiles/${currentTileset}/${x}/${y}.png`;
+        const tileUrl = `./weather-tiles/${currentTileset}/${x}/${y}.png`;
         
         layers.push(new BitmapLayer({
           id: `weather-tile-${x}-${y}`,

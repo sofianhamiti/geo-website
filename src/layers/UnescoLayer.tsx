@@ -31,12 +31,18 @@ async function loadUnescoSitesFromCSV(): Promise<UnescoSite[]> {
   }
 
   try {
+    const csvUrl = './data/wold-heritage-sites-2025.csv';
     console.log('🏛️ Loading UNESCO sites from local CSV...');
+    console.log('🏛️ CSV URL:', csvUrl);
+    console.log('🏛️ Current location:', window.location.href);
     
     // Fetch the local CSV file
-    const response = await fetch('/data/wold-heritage-sites-2025.csv');
+    const response = await fetch(csvUrl);
+    console.log('🏛️ CSV response status:', response.status, response.statusText);
+    console.log('🏛️ CSV response URL:', response.url);
+    
     if (!response.ok) {
-      throw new Error(`Failed to load CSV: ${response.status}`);
+      throw new Error(`Failed to load CSV: ${response.status} ${response.statusText} at ${response.url}`);
     }
     
     const csvText = await response.text();

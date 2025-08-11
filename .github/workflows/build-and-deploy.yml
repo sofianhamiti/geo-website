@@ -7,9 +7,6 @@ on:
     branches: [ main ]
   # Allow manual trigger
   workflow_dispatch:
-  # Run every 12 hours to refresh weather tiles
-  schedule:
-    - cron: '0 6,18 * * *'  # 6 AM and 6 PM UTC
 
 permissions:
   contents: read
@@ -37,26 +34,6 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Download fresh weather tiles
-      env:
-        VITE_OPENWEATHER_API_KEY: ${{ secrets.VITE_OPENWEATHER_API_KEY }}
-      run: |
-        echo "📡 Downloading fresh weather tiles..."
-        
-        # Create tiles directory
-        mkdir -p public/weather-tiles
-        
-        # Run the weather tile download script
-        npm run download-tiles || echo "⚠️ Weather tile download failed, continuing with build..."
-        
-        # Verify tiles were downloaded
-        if [ -d "public/weather-tiles" ] && [ "$(ls -A public/weather-tiles)" ]; then
-          TILE_COUNT=$(find public/weather-tiles -name "*.png" | wc -l)
-          echo "✅ Downloaded $TILE_COUNT weather tiles"
-          echo "📊 Tile storage size: $(du -sh public/weather-tiles | cut -f1)"
-        else
-          echo "⚠️ No weather tiles found, app will download them at runtime"
-        fi
         
     - name: Build application
       env:
@@ -92,6 +69,12 @@ jobs:
         echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Build Tool**: Vite + React + TypeScript" >> $GITHUB_STEP_SUMMARY
+        if [ -d "public/weather-tiles" ] && [ "$(ls -A public/weather-tiles)" ]; then
+          TILE_COUNT=$(find public/weather-tiles -name "*.png" | wc -l)
+          echo "- **Weather Tiles**: 🌦️ Using $TILE_COUNT cached tiles" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Weather Tiles**: ⚠️ No cached tiles (app will download at runtime)" >> $GITHUB_STEP_SUMMARY
+        fi
         if [ -d "dist" ]; then
           BUILD_SIZE=$(du -sh dist/ | cut -f1)
           echo "- **Build Size**: $BUILD_SIZE" >> $GITHUB_STEP_SUMMARY
