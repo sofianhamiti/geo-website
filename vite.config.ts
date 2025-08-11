@@ -1,19 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import createWeatherTilesPlugin from './vite-plugins/weather-tiles'
+import { resolve } from 'path'
+
+// Import weather tiles plugin
+import weatherTilesPlugin from './vite-plugins/weather-tiles'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
-    createWeatherTilesPlugin()
+    weatherTilesPlugin()
   ],
+  base: '/geo-website/', // GitHub Pages base URL
   resolve: {
     alias: {
-      '@': '/src',
+      '@': resolve(__dirname, './src'),
     },
   },
-  optimizeDeps: {
-    include: ['maplibre-gl', '@deck.gl/core', '@deck.gl/layers', '@deck.gl/mapbox', 'suncalc']
-  }
 })
