@@ -6,17 +6,24 @@
 import { WeatherTileDownloader, DownloadConfig } from './weatherTileDownloader';
 import { WeatherTileManager } from './weatherTileManager';
 import chalk from 'chalk';
-import path from 'path';
 
 export interface WeatherTileConfig {
   apiKey: string;
   zoomLevel: number;
   downloadInterval: number; // hours
   maxAge: number; // hours
+  concurrentDownloads?: number;
+  retryAttempts?: number;
+  showProgress?: boolean;
+  basePath?: string;
+  outputDir?: string; // Alternative to basePath for compatibility
+}
+
+interface InternalWeatherTileConfig extends WeatherTileConfig {
+  basePath: string; // Required internally
   concurrentDownloads: number;
   retryAttempts: number;
   showProgress: boolean;
-  basePath: string;
 }
 
 export interface ServiceStatus {
@@ -29,27 +36,35 @@ export interface ServiceStatus {
 }
 
 export class WeatherTileService {
-  private config: WeatherTileConfig;
+  private config: InternalWeatherTileConfig;
   private downloader: WeatherTileDownloader;
   private manager: WeatherTileManager;
   private downloadTimer?: NodeJS.Timeout;
   private isDownloading = false;
 
   constructor(config: WeatherTileConfig) {
-    this.config = config;
+    // Set defaults for optional properties
+    const basePath = config.outputDir || config.basePath || './public/weather-tiles';
+    this.config = {
+      ...config,
+      basePath,
+      concurrentDownloads: config.concurrentDownloads ?? 5,
+      retryAttempts: config.retryAttempts ?? 3,
+      showProgress: config.showProgress ?? true,
+    };
     
     // Initialize components
     const downloadConfig: DownloadConfig = {
-      apiKey: config.apiKey,
-      zoomLevel: config.zoomLevel,
-      outputDir: config.basePath,
-      concurrentDownloads: config.concurrentDownloads,
-      retryAttempts: config.retryAttempts,
-      showProgress: config.showProgress,
+      apiKey: this.config.apiKey,
+      zoomLevel: this.config.zoomLevel,
+      outputDir: this.config.basePath,
+      concurrentDownloads: this.config.concurrentDownloads,
+      retryAttempts: this.config.retryAttempts,
+      showProgress: this.config.showProgress,
     };
 
     this.downloader = new WeatherTileDownloader(downloadConfig);
-    this.manager = new WeatherTileManager(config.basePath);
+    this.manager = new WeatherTileManager(this.config.basePath);
   }
 
   /**
@@ -151,20 +166,44 @@ export class WeatherTileService {
   }
 
   /**
-   * Validate API key
+   * Download current tiles (for CI/build scripts)
+   * Simpler version that just downloads without periodic setup
    */
-  private async validateApiKey(): Promise<boolean> {
-    if (!this.config.apiKey || this.config.apiKey === 'YOUR_API_KEY_HERE') {
+  async downloadCurrentTiles(): Promise<boolean> {
+    if (this.isDownloading) {
+      console.log(chalk.yellow('⏳ Download already in progress...'));
       return false;
     }
 
+    this.isDownloading = true;
+
     try {
-      return await this.downloader.validateApiKey();
+      console.log(chalk.blue('📡 Downloading current weather tiles...'));
+      const result = await this.downloader.downloadTiles();
+      
+      if (result.success) {
+        console.log(chalk.green(`✅ Downloaded ${result.tilesDownloaded} weather tiles`));
+        
+        // Update metadata
+        await this.manager.updateMetadata(
+          result.timestamp,
+          result.tilesDownloaded,
+          result.success
+        );
+      } else {
+        console.log(chalk.yellow('⚠️ Weather tile download completed with warnings'));
+      }
+
+      return result.success;
+
     } catch (error) {
-      console.warn(chalk.yellow(`⚠️  API key validation failed: ${error}`));
+      console.error(chalk.red(`❌ Download failed: ${error}`));
       return false;
+    } finally {
+      this.isDownloading = false;
     }
   }
+
 
   /**
    * Get current tile URL for the frontend

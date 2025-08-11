@@ -46,8 +46,9 @@ function tileToGeoBounds(x: number, y: number, z: number): [number, number, numb
 /**
  * Create simplified weather precipitation layers using BitmapLayer
  * Maps your 16x16 level 4 tiles to world coordinates
+ * Returns both layers and the REAL download timestamp
  */
-export async function createWeatherPrecipitationLayer(): Promise<BitmapLayer[] | null> {
+export async function createWeatherPrecipitationLayer(): Promise<{ layers: BitmapLayer[], timestamp: Date } | null> {
   try {
     if (!CONFIG.weather.localTiles.enabled) {
       console.warn('❌ Local weather tiles disabled in configuration');
@@ -56,6 +57,7 @@ export async function createWeatherPrecipitationLayer(): Promise<BitmapLayer[] |
 
     // Get current tileset from metadata
     let currentTileset: string;
+    let realTimestamp: Date;
     
     try {
       console.log('🌦️ Loading weather tile metadata...');
@@ -73,6 +75,15 @@ export async function createWeatherPrecipitationLayer(): Promise<BitmapLayer[] |
         console.log(`✅ Using weather tileset: ${currentTileset}`);
       } else {
         throw new Error('No currentTileset specified in metadata');
+      }
+
+      // Extract the REAL download timestamp from metadata
+      if (metadata.lastUpdate) {
+        realTimestamp = new Date(metadata.lastUpdate);
+        console.log(`✅ Real weather tile timestamp: ${realTimestamp.toISOString()}`);
+      } else {
+        console.warn('⚠️  No lastUpdate timestamp in metadata, using current time');
+        realTimestamp = new Date();
       }
     } catch (error) {
       console.error('❌ Failed to load weather tile metadata:', error);
@@ -146,12 +157,13 @@ export async function createWeatherPrecipitationLayer(): Promise<BitmapLayer[] |
 
     console.log('🌦️ Weather precipitation layers created successfully');
     console.log(`   Tileset: ${currentTileset}`);
+    console.log(`   Real timestamp: ${realTimestamp.toISOString()}`);
     console.log(`   Layers created: ${layers.length} (16×16 grid)`);
     console.log(`   Using proper Web Mercator tile coordinate system`);
     console.log(`   Opacity: ${CONFIG.weather.localTiles.opacity}`);
     console.log(`   Works at all zoom levels: 0-20`);
 
-    return layers;
+    return { layers, timestamp: realTimestamp };
     
   } catch (error) {
     console.error('❌ Error creating precipitation layers:', error);
@@ -164,44 +176,4 @@ export async function createWeatherPrecipitationLayer(): Promise<BitmapLayer[] |
  */
 export function isPrecipitationLayerConfigured(): boolean {
   return CONFIG.weather.localTiles.enabled;
-}
-
-/**
- * Get weather tile service status
- */
-export async function getWeatherTileStatus() {
-  try {
-    const response = await fetch('/api/weather-tiles/status');
-    if (!response.ok) {
-      return { available: false, error: 'Service not available' };
-    }
-    
-    const status = await response.json();
-    return { available: true, ...status };
-    
-  } catch (error) {
-    return { available: false, error: String(error) };
-  }
-}
-
-/**
- * Force download new weather tiles
- */
-export async function forceWeatherTileDownload() {
-  try {
-    const response = await fetch('/api/weather-tiles/download', {
-      method: 'POST',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Download request failed');
-    }
-    
-    const result = await response.json();
-    return result;
-    
-  } catch (error) {
-    console.error('Failed to force weather tile download:', error);
-    return { success: false, error: String(error) };
-  }
 }

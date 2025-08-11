@@ -12,6 +12,9 @@ yarn-error.log*
 # Build files
 dist
 dist-ssr
+*.d.ts
+!*.d.ts
+*.d.ts.map
 
 # Editor directories and files
 .vscode/*
@@ -39,6 +42,9 @@ Thumbs.db
 
 # Vite
 .vite/
+
+# Weather tiles (downloaded during build)
+public/weather-tiles/
 
 # Claude
 .claude

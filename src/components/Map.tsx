@@ -30,7 +30,6 @@ const Map = () => {
     showUnesco,
     showPrecipitation,
     weatherDataTimestamp,
-    isWeatherLoading,
     isMenuOpen,
     currentTime,
     cities,
@@ -45,14 +44,27 @@ const Map = () => {
     toggleMenu,
     updateTime,
     setWeatherDataTimestamp,
-    setWeatherLoading,
     loadSavedCities,
   } = useMapStore();
 
-  // Load saved cities on mount
+  // Load saved cities and weather timestamp on mount
   useEffect(() => {
     loadSavedCities();
-  }, [loadSavedCities]);
+    
+    // Load the real weather timestamp immediately from metadata
+    fetch('/weather-tiles/metadata.json')
+      .then(response => response.json())
+      .then(metadata => {
+        if (metadata.lastUpdate) {
+          const realTimestamp = new Date(metadata.lastUpdate);
+          setWeatherDataTimestamp(realTimestamp);
+          console.log('✅ Weather timestamp loaded on mount:', realTimestamp.toISOString());
+        }
+      })
+      .catch(error => {
+        console.warn('⚠️  Could not load weather timestamp on mount:', error);
+      });
+  }, [loadSavedCities, setWeatherDataTimestamp]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -317,14 +329,18 @@ const Map = () => {
     });
   }, []);
 
-  // Load weather precipitation layers - Simplified approach with BitmapLayers
+  // Load weather precipitation layers - Using REAL timestamps from metadata
   useEffect(() => {
     if (showPrecipitation && isPrecipitationLayerConfigured()) {
       console.log('🌦️ Loading weather precipitation layers...');
-      createWeatherPrecipitationLayer().then(layers => {
-        if (layers && layers.length > 0) {
-          console.log(`✅ Weather precipitation layers loaded successfully (${layers.length} tiles)`);
-          setPrecipitationLayers(layers);
+      createWeatherPrecipitationLayer().then(result => {
+        if (result && result.layers && result.layers.length > 0) {
+          console.log(`✅ Weather precipitation layers loaded successfully (${result.layers.length} tiles)`);
+          console.log(`✅ Using REAL timestamp: ${result.timestamp.toISOString()}`);
+          
+          // Update the store with the REAL download timestamp
+          setWeatherDataTimestamp(result.timestamp);
+          setPrecipitationLayers(result.layers);
         } else {
           console.error('❌ Failed to create weather precipitation layers');
           setPrecipitationLayers([]);
@@ -339,7 +355,7 @@ const Map = () => {
       }
       setPrecipitationLayers([]);
     }
-  }, [showPrecipitation, weatherDataTimestamp]);
+  }, [showPrecipitation, setWeatherDataTimestamp]);
 
   // Update deck.gl overlay with new layers
   useEffect(() => {
@@ -357,20 +373,8 @@ const Map = () => {
     return () => clearInterval(interval);
   }, [updateTime]);
 
-  // Weather data updates - separate from time updates (3 hours)
-  useEffect(() => {
-    // Initial weather data timestamp
-    if (!weatherDataTimestamp) {
-      setWeatherDataTimestamp(new Date());
-    }
-
-    const weatherInterval = setInterval(() => {
-      console.log('🌦️ Updating weather data timestamp');
-      setWeatherDataTimestamp(new Date());
-    }, CONFIG.app.weatherUpdateFrequency); // 3 hours
-
-    return () => clearInterval(weatherInterval);
-  }, [weatherDataTimestamp, setWeatherDataTimestamp]);
+  // Weather timestamp is now managed by actual tile loading - no more fake timers!
+  // The real timestamp comes from metadata.json when tiles are loaded
 
   // Zoom tracking - update current zoom state
   useEffect(() => {
@@ -604,10 +608,7 @@ const Map = () => {
                   <div>
                     <div className="text-blue-100 font-medium">Precipitation Radar</div>
                     <div className="text-blue-300 text-xs">
-                      {weatherDataTimestamp
-                        ? `Updated ${weatherDataTimestamp.toLocaleTimeString()}`
-                        : 'Live weather data'
-                      }
+                      {weatherDataTimestamp && `Updated ${weatherDataTimestamp.toLocaleTimeString()}`}
                     </div>
                   </div>
                 </div>
