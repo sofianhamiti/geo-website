@@ -1,13 +1,14 @@
 /**
- * Hurricane Layer - Clean and Simple Implementation
- * Uses the user's simplified SVG icon and follows working layer patterns
+ * Hurricane Layer - Enhanced with Trajectory Cones and Forecasts
+ * Renders trajectory cones, forecast tracks, and storm positions using optimized multi-layer approach
  */
 
-import { IconLayer } from '@deck.gl/layers';
+import { IconLayer, TextLayer, PolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import Query from '@arcgis/core/rest/support/Query';
 import { CONFIG } from '../config';
+import { safeAsyncOperation } from '../utils/errorHandler';
 
 // Hurricane data interfaces
 interface HurricaneFeature {
@@ -22,6 +23,9 @@ interface HurricaneFeature {
     BASIN: string;
     DTG: number;
     SS: number; // Saffir-Simpson scale
+    DATELBL?: string;
+    TIMEZONE?: string;
+    FCST_HR?: number; // Forecast hour (0 for current, 12, 24, 48, etc.)
   };
   geometry: {
     x: number;
@@ -29,163 +33,269 @@ interface HurricaneFeature {
   };
 }
 
+// Trajectory cone interface
+interface TrajectoryFeature {
+  attributes: {
+    STORMNAME: string;
+    STORMID: string;
+    FCST_HR: number; // Forecast hour (12, 24, 48, 72, etc.)
+    SS: number;
+    STORMTYPE: string;
+    BASIN: string;
+  };
+  geometry: {
+    rings: number[][][]; // Polygon rings for cone geometry
+  };
+}
+
+// Forecast track interface  
+interface ForecastTrackFeature {
+  attributes: {
+    STORMNAME: string;
+    STORMID: string;
+    SS: number;
+    STORMTYPE: string;
+    BASIN: string;
+  };
+  geometry: {
+    paths: number[][]; // LineString paths for forecast track
+  };
+}
+
+// Enhanced data structure
 interface HurricaneLayerData {
-  hurricanes: HurricaneFeature[];
+  positions: HurricaneFeature[];     // Current + historical + forecast positions
+  trajectories: TrajectoryFeature[]; // Forecast uncertainty cones
+  tracks: ForecastTrackFeature[];    // Forecast centerlines
   lastUpdate: Date | null;
   error: string | null;
 }
 
-// Hurricane data cache
+// Hurricane data cache - enhanced structure
 let hurricaneDataCache: HurricaneLayerData = {
-  hurricanes: [],
+  positions: [],
+  trajectories: [],
+  tracks: [],
   lastUpdate: null,
   error: null,
 };
 
-// Hurricane SVG content using user's simplified icon
+// Hurricane SVG content - optimized for ocean visibility
 const hurricaneSvgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
     <!-- Center circle -->
-    <circle cx="64" cy="64" r="22" fill="none" stroke="#d4d7dd" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="64" cy="64" r="22" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
     
     <!-- Upper sweep line -->
-    <path d="M50 29.2l-1 1.9A67.4 67.4 0 0 0 42.2 66.8" fill="none" stroke="#d4d7dd" stroke-width="6" stroke-linecap="round"/>
+    <path d="M50 29.2l-1 1.9A67.4 67.4 0 0 0 42.2 66.8" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
     
     <!-- Lower sweep line -->
-    <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#d4d7dd" stroke-width="6" stroke-linecap="round"/>
+    <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
 </svg>`;
 
-// Note: Hurricane icons are now generated dynamically per category using getHurricaneIcon()
-
-// Create FeatureLayer for hurricane data
-let hurricaneLayer: FeatureLayer | null = null;
+// Create FeatureLayers for hurricane data
+let hurricanePositionLayer: FeatureLayer | null = null;
+let hurricaneTrajectoryLayer: FeatureLayer | null = null;
+let hurricaneTrackLayer: FeatureLayer | null = null;
 
 /**
- * Initialize Hurricane FeatureLayer
+ * Initialize Hurricane FeatureLayers
  */
-function initializeHurricaneLayer() {
-  if (hurricaneLayer) {
-    console.log('🌀 [DEBUG] Hurricane layer already initialized');
-    return; // Already initialized
+function initializeHurricaneLayers() {
+  if (hurricanePositionLayer && hurricaneTrajectoryLayer && hurricaneTrackLayer) {
+    return;
   }
 
-  console.log('🌀 [DEBUG] Initializing Hurricane FeatureLayer...');
-  console.log('🌀 [DEBUG] Service URL:', `${CONFIG.weather.hurricanes.serviceUrl}/1`);
-  
   try {
-    hurricaneLayer = new FeatureLayer({
-      url: `${CONFIG.weather.hurricanes.serviceUrl}/1`, // Observed positions
+    // Layer 0: Trajectory Cones
+    hurricaneTrajectoryLayer = new FeatureLayer({
+      url: `${CONFIG.weather.hurricanes.serviceUrl}/0`,
+      refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
+      outFields: ['*'],
+      title: 'Hurricane Trajectory Cones'
+    });
+
+    // Layer 1: Observed Positions
+    hurricanePositionLayer = new FeatureLayer({
+      url: `${CONFIG.weather.hurricanes.serviceUrl}/1`,
       refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
       outFields: ['*'],
       title: 'Hurricane Positions'
     });
-    
-    console.log('✅ [DEBUG] Hurricane FeatureLayer initialized successfully');
+
+    // Layer 2: Forecast Tracks
+    hurricaneTrackLayer = new FeatureLayer({
+      url: `${CONFIG.weather.hurricanes.serviceUrl}/2`,
+      refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
+      outFields: ['*'],
+      title: 'Hurricane Forecast Tracks'
+    });
   } catch (error) {
-    console.error('❌ [ERROR] Failed to initialize Hurricane FeatureLayer:', error);
+    console.error('❌ Failed to initialize Hurricane FeatureLayers:', error);
     throw error;
   }
 }
 
 /**
- * Fetch hurricane data from ArcGIS service
+ * Fetch hurricane position data from ArcGIS service (Layer 1)
  */
-async function fetchHurricaneData(): Promise<HurricaneFeature[]> {
-  console.log('🌀 [DEBUG] fetchHurricaneData() called');
-  
-  if (!hurricaneLayer) {
-    console.error('❌ [ERROR] Hurricane layer not initialized when fetching data');
-    return [];
+async function fetchHurricanePositions(): Promise<HurricaneFeature[]> {
+  if (!hurricanePositionLayer) {
+    throw new Error('Hurricane position layer not initialized');
   }
 
   try {
-    console.log('🌀 [DEBUG] Fetching hurricane data from ArcGIS...');
-    
     const query = new Query({
       where: '1=1',
       outFields: ['*'],
       returnGeometry: true
     });
 
-    console.log('🌀 [DEBUG] Executing query against hurricane layer...');
-    const result = await hurricaneLayer.queryFeatures(query);
-    console.log(`🌀 [DEBUG] Hurricane query successful: ${result.features.length} hurricanes found`);
+    const result = await hurricanePositionLayer.queryFeatures(query);
     
     if (result.features.length === 0) {
-      console.log('🌀 [INFO] No active hurricanes found');
       return [];
     }
 
-    const mappedFeatures = result.features.map((feature: any) => {
-      console.log('🌀 [DEBUG] Processing hurricane feature:', feature.attributes?.STORMNAME || 'Unknown');
-      return {
-        attributes: feature.attributes,
-        geometry: {
-          x: feature.geometry.longitude,
-          y: feature.geometry.latitude
-        }
-      };
-    });
+    const mappedFeatures = result.features.map((feature: any) => ({
+      attributes: feature.attributes,
+      geometry: {
+        x: feature.geometry.longitude,
+        y: feature.geometry.latitude
+      }
+    }));
     
-    console.log('🌀 [DEBUG] Successfully mapped', mappedFeatures.length, 'hurricane features');
     return mappedFeatures;
   } catch (error) {
-    console.error('❌ [ERROR] Error fetching hurricane data:', error);
-    console.error('❌ [ERROR] Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error('❌ Error fetching hurricane positions:', error);
     throw error;
   }
 }
 
 /**
- * Find the latest hurricane based on DTG timestamp
+ * Fetch hurricane trajectory cone data - try multiple layers to find the right format
  */
-function findLatestHurricane(hurricanes: HurricaneFeature[]): HurricaneFeature | null {
-  console.log('🌀 [DEBUG] findLatestHurricane() called with', hurricanes.length, 'hurricanes');
+async function fetchHurricaneTrajectories(): Promise<TrajectoryFeature[]> {
+  // Try different layers - some services put cones in layer 3, 4, or 5
+  const layersToTry = [0, 3, 4, 5];
   
-  if (hurricanes.length === 0) {
-    console.log('🌀 [DEBUG] No hurricanes found, returning null');
-    return null;
+  for (const layerNum of layersToTry) {
+    try {
+      const trajectoryLayer = new FeatureLayer({
+        url: `${CONFIG.weather.hurricanes.serviceUrl}/${layerNum}`,
+        outFields: ['*']
+      });
+
+      const query = new Query({
+        where: '1=1',
+        outFields: ['*'],
+        returnGeometry: true
+      });
+
+      const result = await trajectoryLayer.queryFeatures(query);
+      
+      if (result.features.length > 0) {
+        const mappedFeatures = result.features
+          .map((feature: any) => {
+            if (!feature.geometry || !feature.geometry.rings || feature.geometry.rings.length === 0) {
+              return null;
+            }
+            
+            return {
+              attributes: feature.attributes,
+              geometry: {
+                rings: feature.geometry.rings
+              }
+            };
+          })
+          .filter(Boolean) as TrajectoryFeature[];
+          
+        if (mappedFeatures.length > 0) {
+          return mappedFeatures;
+        }
+      }
+    } catch (error) {
+      // Continue to next layer
+      continue;
+    }
   }
   
-  const latest = hurricanes.reduce((latest, current) => {
-    console.log('🌀 [DEBUG] Comparing hurricanes:', {
-      current: current.attributes.STORMNAME,
-      currentDTG: current.attributes.DTG,
-      latest: latest?.attributes.STORMNAME || 'None',
-      latestDTG: latest?.attributes.DTG || 0
-    });
-    return (!latest || current.attributes.DTG > latest.attributes.DTG) ? current : latest;
-  }, null as HurricaneFeature | null);
-  
-  console.log('🌀 [DEBUG] Latest hurricane selected:', latest?.attributes.STORMNAME || 'None', 'DTG:', latest?.attributes.DTG);
-  return latest;
+  // No trajectory cones found in any layer
+  return [];
 }
 
 /**
- * Update hurricane data
+ * Fetch hurricane forecast track data from ArcGIS service (Layer 2)
+ */
+async function fetchHurricaneTracks(): Promise<ForecastTrackFeature[]> {
+  if (!hurricaneTrackLayer) {
+    return [];
+  }
+
+  try {
+    const query = new Query({
+      where: '1=1',
+      outFields: ['*'],
+      returnGeometry: true
+    });
+
+    const result = await hurricaneTrackLayer.queryFeatures(query);
+    
+    if (result.features.length === 0) {
+      return [];
+    }
+
+    const mappedFeatures = result.features.map((feature: any) => ({
+      attributes: feature.attributes,
+      geometry: {
+        paths: feature.geometry.paths || []
+      }
+    }));
+    
+    return mappedFeatures;
+  } catch (error) {
+    console.error('❌ Error fetching hurricane tracks:', error);
+    return [];
+  }
+}
+
+/**
+ * Update hurricane data from ArcGIS service - fetch all layers
  */
 async function updateHurricaneData(): Promise<void> {
-  try {
-    const hurricanes = await fetchHurricaneData();
-    
-    hurricaneDataCache = {
-      hurricanes,
-      lastUpdate: new Date(),
-      error: null,
-    };
-    
-    console.log(`✅ Hurricane data updated: ${hurricanes.length} active storms`);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    hurricaneDataCache.error = errorMessage;
-    console.error('❌ Failed to fetch hurricane data:', errorMessage);
-  }
+  const result = await safeAsyncOperation(
+    async () => {
+      // Fetch data from all three layers in parallel for better performance
+      const [positions, trajectories, tracks] = await Promise.all([
+        fetchHurricanePositions(),
+        fetchHurricaneTrajectories(), 
+        fetchHurricaneTracks()
+      ]);
+      
+      const newData: HurricaneLayerData = {
+        positions,
+        trajectories,
+        tracks,
+        lastUpdate: new Date(),
+        error: null,
+      };
+      
+      return newData;
+    },
+    'fetch hurricane data from ArcGIS API',
+    {
+      positions: [],
+      trajectories: [],
+      tracks: [],
+      lastUpdate: null as Date | null,
+      error: 'Failed to fetch hurricane data' as string | null,
+    } as HurricaneLayerData
+  );
+  
+  hurricaneDataCache = result;
 }
 
 /**
- * Get hurricane color based on Saffir-Simpson category (following earthquake pattern)
+ * Get hurricane color based on Saffir-Simpson category
  */
 function getHurricaneColor(category: number): [number, number, number, number] {
   const colors = CONFIG.weather.hurricanes.categoryColors;
@@ -193,7 +303,7 @@ function getHurricaneColor(category: number): [number, number, number, number] {
 }
 
 /**
- * Get hurricane size based on category (following earthquake pattern)
+ * Get hurricane size based on category
  */
 function getHurricaneSize(category: number): number {
   const sizes = CONFIG.weather.hurricanes.categorySizes;
@@ -207,16 +317,35 @@ function createHurricaneIcon(category: number): string {
   const color = getHurricaneColor(category);
   const hexColor = `#${color[0].toString(16).padStart(2, '0')}${color[1].toString(16).padStart(2, '0')}${color[2].toString(16).padStart(2, '0')}`;
   
-  // Replace the default stroke color #d4d7dd with the category color
-  const coloredSvgContent = hurricaneSvgContent.replace(/#d4d7dd/g, hexColor);
+  // Replace the default stroke color #ffffff with the category color
+  const coloredSvgContent = hurricaneSvgContent.replace(/#ffffff/g, hexColor);
   
   return `data:image/svg+xml;base64,${btoa(coloredSvgContent)}`;
+}
+
+/**
+ * Create category-specific colored dot SVG icon for older hurricane positions
+ */
+function createDotIcon(category: number): string {
+  const color = getHurricaneColor(category);
+  const hexColor = `#${color[0].toString(16).padStart(2, '0')}${color[1].toString(16).padStart(2, '0')}${color[2].toString(16).padStart(2, '0')}`;
+  
+  const dotSvgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+    <circle cx="64" cy="64" r="32" fill="${hexColor}" stroke="rgba(255,255,255,0.8)" stroke-width="3"/>
+  </svg>`;
+  
+  return `data:image/svg+xml;base64,${btoa(dotSvgContent)}`;
 }
 
 /**
  * Cache for category-specific hurricane icons
  */
 const hurricaneIconCache: { [key: number]: string } = {};
+
+/**
+ * Cache for category-specific dot icons
+ */
+const dotIconCache: { [key: number]: string } = {};
 
 /**
  * Get cached or create hurricane icon for category
@@ -229,41 +358,40 @@ function getHurricaneIcon(category: number): string {
 }
 
 /**
- * Hurricane Manager class
+ * Get cached or create dot icon for category
+ */
+function getDotIcon(category: number): string {
+  if (!dotIconCache[category]) {
+    dotIconCache[category] = createDotIcon(category);
+  }
+  return dotIconCache[category];
+}
+
+/**
+ * Hurricane Manager class - follows same pattern as ISS and Earthquake managers
  */
 export class HurricaneManager {
   private updateInterval: NodeJS.Timeout | null = null;
   private isInitialized = false;
 
   async initialize(): Promise<void> {
-    console.log('🌀 [DEBUG] HurricaneManager.initialize() called');
-    
     if (this.isInitialized) {
-      console.log('🌀 [DEBUG] Hurricane Manager already initialized');
       return;
     }
     
     try {
-      console.log('🌀 [DEBUG] Initializing hurricane layer...');
-      // Initialize layer
-      initializeHurricaneLayer();
-      
-      console.log('🌀 [DEBUG] Fetching initial hurricane data...');
-      // Initial data fetch
+      initializeHurricaneLayers();
       await updateHurricaneData();
       
-      console.log('🌀 [DEBUG] Setting up automatic updates...');
-      // Set up automatic updates
       this.updateInterval = setInterval(() => {
         updateHurricaneData().catch(error => {
-          console.error('❌ [ERROR] Hurricane update error:', error);
+          console.error('❌ Hurricane update error:', error);
         });
       }, CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000);
       
       this.isInitialized = true;
-      console.log('✅ [DEBUG] Hurricane Manager initialized successfully');
     } catch (error) {
-      console.error('❌ [ERROR] Failed to initialize Hurricane Manager:', error);
+      console.error('❌ Failed to initialize Hurricane Manager:', error);
       throw error;
     }
   }
@@ -274,7 +402,6 @@ export class HurricaneManager {
       this.updateInterval = null;
     }
     this.isInitialized = false;
-    console.log('✅ Hurricane Manager destroyed');
   }
 
   getData(): HurricaneLayerData {
@@ -283,61 +410,187 @@ export class HurricaneManager {
 }
 
 /**
- * Create hurricane visualization layers
+ * Create hurricane visualization layers - Enhanced multi-layer approach
  */
-export function createHurricaneLayers(): Layer[] {
-  console.log('🌀 [DEBUG] createHurricaneLayers() called');
+export function createHurricaneLayers(currentTime: Date): Layer[] {
   const layers: Layer[] = [];
-  const { hurricanes, error } = hurricaneDataCache;
+  const { positions, trajectories, tracks, error } = hurricaneDataCache;
 
-  console.log('🌀 [DEBUG] Hurricane data cache state:', {
-    hurricanes: hurricanes.length,
-    error,
-    lastUpdate: hurricaneDataCache.lastUpdate
-  });
-
-  // If there's an error, return empty (no error display needed)
+  // Error handling - show error message if API fails
   if (error) {
-    console.error('🌀 [ERROR] Hurricane layer error:', error);
+    layers.push(new TextLayer({
+      id: 'hurricane-error',
+      data: [{ position: [0, 0], text: `Hurricane Error: ${error}` }],
+      getPosition: (d: any) => d.position,
+      getText: (d: any) => d.text,
+      getSize: 16,
+      getColor: [255, 107, 53, 255], // Orange error text
+      getTextAnchor: 'middle',
+      getAlignmentBaseline: 'center',
+      background: true,
+      getBackgroundColor: [15, 23, 42, 204],
+      backgroundPadding: [8, 4, 8, 4],
+      pickable: false,
+    }));
     return layers;
   }
 
-  // Create hurricane position icons
-  if (hurricanes.length > 0) {
-    console.log(`🌀 [DEBUG] Creating hurricane icons for ${hurricanes.length} storms`);
-    
-    // Find the latest hurricane for rotation
-    const latestHurricane = findLatestHurricane(hurricanes);
-    console.log('🌀 [DEBUG] Latest hurricane for rotation:', latestHurricane?.attributes.STORMNAME || 'None');
-    
-    const iconLayer = new IconLayer({
-      id: 'hurricane-positions',
-      data: hurricanes,
-      getPosition: (d: HurricaneFeature) => [d.geometry.x, d.geometry.y],
-      getIcon: (d: HurricaneFeature) => ({
-        url: getHurricaneIcon(d.attributes.SS || 0),
-        width: CONFIG.weather.hurricanes.icon.width,
-        height: CONFIG.weather.hurricanes.icon.height,
-        anchorY: CONFIG.weather.hurricanes.icon.anchorY,
-        anchorX: CONFIG.weather.hurricanes.icon.anchorX,
-      }),
-      getSize: (d: HurricaneFeature) => getHurricaneSize(d.attributes.SS || 0) *
-        (CONFIG.weather.hurricanes.categoryScaling.baseMultiplier +
-         (d.attributes.SS || 0) * CONFIG.weather.hurricanes.categoryScaling.categoryWeight) *
-        CONFIG.weather.hurricanes.sizeMultiplier,
-      getAngle: (d: HurricaneFeature) => {
-        // Only rotate the latest hurricane
-        const isLatest = latestHurricane && d.attributes.STORMID === latestHurricane.attributes.STORMID;
-        
-        console.log('🌀 [DEBUG] getAngle called for storm:', d.attributes.STORMNAME, 'isLatest:', isLatest);
-        
-        if (isLatest) {
-          const slowRotationSpeed = 0.008; // Increased speed for visibility (10x faster)
-          const angle = (Date.now() * slowRotationSpeed) % (2 * Math.PI);
-          console.log('🌀 [DEBUG] Rotation angle for', d.attributes.STORMNAME, ':', angle, 'radians, degrees:', (angle * 180 / Math.PI).toFixed(1));
-          return angle;
+  // Layer 1: Trajectory Cones (PolygonLayer) - render first so they appear behind other elements  
+  if (trajectories.length > 0) {
+    layers.push(new PolygonLayer({
+      id: 'hurricane-trajectory-cones',
+      data: trajectories,
+      getPolygon: (d: TrajectoryFeature) => {
+        const rings = d.geometry.rings;
+        if (!rings || rings.length === 0) {
+          return [];
         }
-        return 0; // No rotation for other hurricanes
+        
+        const outerRing = rings[0];
+        return outerRing.map(coord => [coord[0], coord[1]]);
+      },
+      getFillColor: (d: TrajectoryFeature): [number, number, number, number] => {
+        const opacity = Math.max(40, 120 - (d.attributes.FCST_HR || 0) * 1.5);
+        return [200, 200, 200, opacity]; // Light grey with dynamic opacity
+      },
+      getLineColor: (d: TrajectoryFeature): [number, number, number, number] => {
+        return [255, 255, 255, 180]; // White border
+      },
+      getLineWidth: 3,
+      lineWidthUnits: 'pixels',
+      pickable: true,
+      stroked: true,
+      filled: true,
+      extruded: false,
+      wireframe: false,
+      getTooltip: ({object}: {object: TrajectoryFeature}) => {
+        if (!object) return null;
+        const attrs = object.attributes;
+        return {
+          html: `
+            <div style="
+              background: rgba(15, 23, 42, 0.95);
+              color: white;
+              padding: 8px 12px;
+              border-radius: 6px;
+              font-family: Inter, sans-serif;
+              font-size: 13px;
+            ">
+              <div style="font-weight: 600; margin-bottom: 4px;">
+                🌀 ${attrs.STORMNAME || 'Storm'} Forecast Cone
+              </div>
+              <div style="color: #e5e7eb;">
+                <div>Forecast Hour: ${attrs.FCST_HR}h</div>
+                <div>Category: ${attrs.SS > 0 ? attrs.SS : 'TS'}</div>
+                <div>Basin: ${attrs.BASIN?.toUpperCase() || 'Unknown'}</div>
+              </div>
+            </div>
+          `
+        };
+      }
+    }));
+  }
+
+  // Layer 2: Forecast Tracks (PathLayer)
+  if (tracks.length > 0) {
+    layers.push(new PathLayer({
+      id: 'hurricane-forecast-tracks',
+      data: tracks,
+      getPath: (d: ForecastTrackFeature) => d.geometry.paths[0],
+      getColor: (d: ForecastTrackFeature) => {
+        return [220, 220, 220, 200]; // Light grey for forecast tracks
+      },
+      getWidth: 3,
+      widthUnits: 'pixels',
+      pickable: true,
+      getDashArray: [8, 4], // Dashed line to differentiate from observed track
+      dashJustified: true,
+      getTooltip: ({object}: {object: ForecastTrackFeature}) => {
+        if (!object) return null;
+        const attrs = object.attributes;
+        return {
+          html: `
+            <div style="
+              background: rgba(15, 23, 42, 0.95);
+              color: white;
+              padding: 8px 12px;
+              border-radius: 6px;
+              font-family: Inter, sans-serif;
+              font-size: 13px;
+            ">
+              <div style="font-weight: 600; margin-bottom: 4px;">
+                🌀 ${attrs.STORMNAME || 'Storm'} Forecast Track
+              </div>
+              <div style="color: #e5e7eb;">
+                <div>Category: ${attrs.SS > 0 ? attrs.SS : 'TS'}</div>
+                <div>Basin: ${attrs.BASIN?.toUpperCase() || 'Unknown'}</div>
+              </div>
+            </div>
+          `
+        };
+      }
+    }));
+  }
+
+  // Layer 3: Storm Positions (IconLayer) - render last so they appear on top
+  if (positions.length > 0) {
+    // Group hurricanes by storm ID and find latest position per storm
+    const stormGroups = positions.reduce((groups: Record<string, HurricaneFeature[]>, hurricane: HurricaneFeature) => {
+      const stormId = hurricane.attributes.STORMID;
+      if (!groups[stormId]) groups[stormId] = [];
+      groups[stormId].push(hurricane);
+      return groups;
+    }, {} as Record<string, HurricaneFeature[]>);
+
+    // Create set of latest position identifiers
+    const latestPositions = new Set<string>();
+    Object.values(stormGroups).forEach((stormHurricanes: HurricaneFeature[]) => {
+      const latest = stormHurricanes.reduce((latest: HurricaneFeature, current: HurricaneFeature) => {
+        return current.attributes.DTG > latest.attributes.DTG ? current : latest;
+      });
+      const positionId = `${latest.attributes.STORMID}-${latest.attributes.DTG}`;
+      latestPositions.add(positionId);
+    });
+
+    layers.push(new IconLayer({
+      id: 'hurricane-positions',
+      data: positions,
+      getPosition: (d: HurricaneFeature) => [d.geometry.x, d.geometry.y],
+      getIcon: (d: HurricaneFeature) => {
+        const positionId = `${d.attributes.STORMID}-${d.attributes.DTG}`;
+        const isLatestPosition = latestPositions.has(positionId);
+        
+        if (isLatestPosition) {
+          // Latest position gets full hurricane icon
+          return {
+            url: getHurricaneIcon(d.attributes.SS || 0),
+            width: CONFIG.weather.hurricanes.icon.width,
+            height: CONFIG.weather.hurricanes.icon.height,
+            anchorY: CONFIG.weather.hurricanes.icon.anchorY,
+            anchorX: CONFIG.weather.hurricanes.icon.anchorX,
+          };
+        } else {
+          // Older positions get dot icons
+          return {
+            url: getDotIcon(d.attributes.SS || 0),  
+            width: 96, // Bigger dots for better visibility
+            height: 96,
+            anchorY: 48,
+            anchorX: 48,
+          };
+        }
+      },
+      getSize: (d: HurricaneFeature) => {
+        const positionId = `${d.attributes.STORMID}-${d.attributes.DTG}`;
+        const isLatestPosition = latestPositions.has(positionId);
+        
+        const baseSize = getHurricaneSize(d.attributes.SS || 0) *
+          (CONFIG.weather.hurricanes.categoryScaling.baseMultiplier +
+           (d.attributes.SS || 0) * CONFIG.weather.hurricanes.categoryScaling.categoryWeight) *
+          CONFIG.weather.hurricanes.sizeMultiplier;
+        
+        // Bigger dots for better visibility
+        return isLatestPosition ? baseSize : baseSize * 0.65;
       },
       sizeScale: 1,
       sizeUnits: 'pixels',
@@ -345,9 +598,9 @@ export function createHurricaneLayers(): Layer[] {
       autoHighlight: false,
       alphaCutoff: -1, // Include ALL pixels for picking
       updateTriggers: {
-        getIcon: hurricanes.map(h => h.attributes.SS || 0), // Update when categories change
-        getSize: hurricanes.map(h => h.attributes.SS || 0), // Update when categories change
-        getAngle: Date.now(), // Update rotation continuously
+        getPosition: currentTime.getTime(),
+        getSize: currentTime.getTime(),
+        getIcon: positions.length, // Trigger icon updates when data changes
       },
       getTooltip: ({object}: {object: HurricaneFeature}) => {
         if (!object) return null;
@@ -408,12 +661,8 @@ export function createHurricaneLayers(): Layer[] {
           `
         };
       }
-    });
-    
-    layers.push(iconLayer);
-    console.log(`✅ Created hurricane layer with ${hurricanes.length} storms`);
-  } else {
-    console.log('🌀 No active hurricanes found');
+    }));
+
   }
 
   return layers;

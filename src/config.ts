@@ -310,14 +310,14 @@ export const CONFIG = {
         anchorY: 64,
       },
 
-      // Saffir-Simpson category colors
+      // Saffir-Simpson category colors - optimized for ocean visibility
       categoryColors: {
         5: [139, 0, 139, 255] as [number, number, number, number], // Purple - Cat 5 (157+ mph)
         4: [255, 0, 0, 255] as [number, number, number, number],   // Red - Cat 4 (130-156 mph)
         3: [255, 69, 0, 255] as [number, number, number, number],  // Orange-Red - Cat 3 (111-129 mph)
         2: [255, 140, 0, 255] as [number, number, number, number], // Orange - Cat 2 (96-110 mph)
         1: [255, 215, 0, 255] as [number, number, number, number], // Gold - Cat 1 (74-95 mph)
-        0: [65, 105, 225, 255] as [number, number, number, number] // Blue - Tropical Storm (39-73 mph)
+        0: [0, 255, 255, 255] as [number, number, number, number]  // Bright Cyan - Tropical Storm (39-73 mph) - high visibility against ocean
       },
 
       // Balanced exponential category-based sizing

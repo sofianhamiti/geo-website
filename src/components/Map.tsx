@@ -475,7 +475,7 @@ const Map = () => {
     if (showHurricanes && hurricaneManager) {
       console.log('🌀 [DEBUG] Creating hurricane layers with manager...');
       try {
-        const layers = createHurricaneLayers();
+        const layers = createHurricaneLayers(currentTime);
         setHurricaneLayers(layers);
         setHurricaneLastUpdate(new Date());
       } catch (error) {
@@ -485,7 +485,7 @@ const Map = () => {
     } else {
       setHurricaneLayers([]);
     }
-  }, [showHurricanes, hurricaneManager, setHurricaneLayers, setHurricaneLastUpdate]);
+  }, [showHurricanes, hurricaneManager, currentTime, setHurricaneLayers, setHurricaneLastUpdate]);
 
   // Update deck.gl overlay with new layers
   useEffect(() => {
@@ -827,7 +827,7 @@ const Map = () => {
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
                 <div className="flex items-center space-x-3">
                   <div className="w-5 h-5 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-red-400">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
                       <path d="M15.5 19v2h-1.77c-.34.6-.99 1-1.73 1s-1.39-.4-1.73-1H8.5v-2h1.77c.17-.3.43-.56.73-.73V17h-1c-.55 0-1-.45-1-1v-3H6v4c0 .55-.45 1-1 1H3c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h1V6h-1c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v1c0 .55-.45 1-1 1h-1v1h1c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v9c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-4h-3v3c0 .55-.45 1-1 1h-1v1.27c.3.17.56.43.73.73zM3 16v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8zm16 8v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8z"/>
                     </svg>
                   </div>
@@ -855,8 +855,13 @@ const Map = () => {
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
                 <div className="flex items-center space-x-3">
                   <div className="w-5 h-5 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
-                      <path d="M12 3L2 13.09L4.5 15.6L12 8.1L19.5 15.6L22 13.09L12 3zM6.5 18L12 12.5L17.5 18L12 23.5L6.5 18z"/>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-red-500">
+                      {/* Center epicenter dot */}
+                      <circle cx="8" cy="8" r="1" fill="currentColor"/>
+                      {/* Inner ring */}
+                      <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="0.8"/>
+                      {/* Outer ring */}
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="0.6" opacity="0.7"/>
                     </svg>
                   </div>
                   <div>
@@ -889,8 +894,13 @@ const Map = () => {
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
                 <div className="flex items-center space-x-3">
                   <div className="w-5 h-5 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-orange-400">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 6c1.1 0 2 .9 2 2 0 .74-.4 1.38-1 1.73v2.27c0 .55-.45 1-1 1s-1-.45-1-1v-2.27c-.6-.35-1-.99-1-1.73 0-1.1.9-2 2-2zm0-4c4.41 0 8 3.59 8 8s-3.59 8-8 8-8-3.59-8-8 3.59-8 8-8z"/>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-orange-400">
+                      {/* Center eye */}
+                      <circle cx="8" cy="8" r="2.5" fill="none" stroke="currentColor" strokeWidth="1"/>
+                      {/* Upper sweep line */}
+                      <path d="M6 3.5l-0.1 0.2A8 8 0 0 0 5.2 8.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+                      {/* Lower sweep line */}
+                      <path d="M10 12.5l0.1-0.2A8 8 0 0 0 10.8 7.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
                     </svg>
                   </div>
                   <div>

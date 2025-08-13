@@ -36,8 +36,6 @@ jobs:
       
         
     - name: Build application
-      env:
-        VITE_OPENWEATHER_API_KEY: ${{ secrets.VITE_OPENWEATHER_API_KEY }}
       run: npm run build
       
     - name: Build summary
@@ -69,12 +67,6 @@ jobs:
         echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Build Tool**: Vite + React + TypeScript" >> $GITHUB_STEP_SUMMARY
-        if [ -d "public/weather-tiles" ] && [ "$(ls -A public/weather-tiles)" ]; then
-          TILE_COUNT=$(find public/weather-tiles -name "*.png" | wc -l)
-          echo "- **Weather Tiles**: 🌦️ Using $TILE_COUNT cached tiles" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- **Weather Tiles**: ⚠️ No cached tiles (app will download at runtime)" >> $GITHUB_STEP_SUMMARY
-        fi
         if [ -d "dist" ]; then
           BUILD_SIZE=$(du -sh dist/ | cut -f1)
           echo "- **Build Size**: $BUILD_SIZE" >> $GITHUB_STEP_SUMMARY
