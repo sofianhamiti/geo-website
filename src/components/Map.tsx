@@ -3,78 +3,105 @@
  * Single source of truth for all map functionality
  */
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
+import { createLayerTooltip } from '../utils/tooltipFactory';
 import { createTerminatorLayer } from '../layers/TerminatorLayer';
 import { createMountainsLayers } from '../layers/MountainsLayer';
 import { createUnescoLayers } from '../layers/UnescoLayer';
+import { createTimeZonesLayers, isTimeZonesLayerConfigured } from '../layers/TimeZonesLayer';
 import { createCityTimesLayers } from '../layers/CityTimesLayer';
-import { createWeatherPrecipitationLayer, isPrecipitationLayerConfigured } from '../layers/WeatherPrecipitationLayer';
+import { createISSLayers, isISSTrackingConfigured } from '../layers/ISSLayer';
+import { createHurricaneLayers, isHurricaneLayerConfigured } from '../layers/HurricaneLayer';
+import { createEarthquakeLayers, isEarthquakeLayerConfigured } from '../layers/EarthquakeLayer';
 import { useMapStore } from '../store/mapStore';
 import { CONFIG } from '../config';
 import { CityManager } from './CityManager';
+import ISSVideoOverlay from './ISSVideoOverlay';
 
 const Map = () => {
   const mapContainer = useRef(null);
   const [currentZoom, setCurrentZoom] = useState(2);
   
+  // Separate state for precise time display (1-second updates)
+  const [displayTime, setDisplayTime] = useState(new Date());
+  
+  
   // Use map store for state management
   const {
     map,
     isMapLoaded,
+    selectedBasemap,
     showArcgisPlaces,
     showTerminator,
     showCities,
     showMountains,
     showUnesco,
-    showPrecipitation,
-    weatherDataTimestamp,
+    showTimezones,
+    showISS,
+    showHurricanes,
+    showEarthquakes,
+    issLayers,
+    issManager,
+    isISSLoading,
+    hurricaneLayers,
+    hurricaneManager,
+    hurricaneLastUpdate,
+    isHurricanesLoading,
+    earthquakeLayers,
+    earthquakeManager,
+    earthquakeLastUpdate,
+    isEarthquakesLoading,
+    timezoneLayers,
     isMenuOpen,
     currentTime,
     cities,
     setMap,
     setMapLoaded,
+    setSelectedBasemap,
     toggleArcgisPlaces,
     toggleTerminator,
     toggleCities,
     toggleMountains,
     toggleUnesco,
-    togglePrecipitation,
+    toggleTimezones,
+    toggleISS,
+    toggleHurricanes,
+    toggleEarthquakes,
     toggleMenu,
     updateTime,
-    setWeatherDataTimestamp,
+    setISSLayers,
+    setHurricaneLayers,
+    setHurricaneLastUpdate,
+    setEarthquakeLayers,
+    setEarthquakeLastUpdate,
+    setTimezoneLayers,
+    initializeISSManager,
+    destroyISSManager,
+    initializeHurricaneManager,
+    destroyHurricaneManager,
+    initializeEarthquakeManager,
+    destroyEarthquakeManager,
     loadSavedCities,
+    setISSVideoVisible,
   } = useMapStore();
 
-  // Load saved cities and weather timestamp on mount
+  // ISS click handler for video overlay
+  const handleISSClick = useCallback((info: any) => {
+    if (info.object) {
+      console.log('🛰️ ISS clicked at screen coordinates:', info.x, info.y);
+      setISSVideoVisible(true, [info.x, info.y]);
+    }
+  }, [setISSVideoVisible]);
+
+  // Load saved cities on mount
   useEffect(() => {
     loadSavedCities();
-    
-    // Load the real weather timestamp immediately from metadata
-    const metadataUrl = './weather-tiles/metadata.json';
-    console.log('🌦️ Loading weather timestamp on mount from:', metadataUrl);
-    fetch(metadataUrl)
-      .then(response => {
-        console.log('🌦️ Mount metadata response:', response.status, response.url);
-        return response.json();
-      })
-      .then(metadata => {
-        if (metadata.lastUpdate) {
-          const realTimestamp = new Date(metadata.lastUpdate);
-          setWeatherDataTimestamp(realTimestamp);
-          console.log('✅ Weather timestamp loaded on mount:', realTimestamp.toISOString());
-        }
-      })
-      .catch(error => {
-        console.warn('⚠️  Could not load weather timestamp on mount:', error);
-      });
-  }, [loadSavedCities, setWeatherDataTimestamp]);
+  }, [loadSavedCities]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
-
-    console.log('Creating consolidated world map...');
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
@@ -87,6 +114,13 @@ const Map = () => {
             tileSize: 256, // Keep working value instead of config's 1024
             maxzoom: CONFIG.sources.maxZoom,
             attribution: CONFIG.sources.attribution,
+          },
+          [CONFIG.sourceIds.arcgisSatellite]: {
+            type: 'raster',
+            tiles: [CONFIG.sources.arcgisSatellite],
+            tileSize: CONFIG.sources.tileSize,
+            maxzoom: CONFIG.sources.maxZoom,
+            attribution: CONFIG.sources.arcgisSatelliteAttribution,
           },
           [CONFIG.sourceIds.arcgisPlaces]: {
             type: 'raster',
@@ -101,6 +135,17 @@ const Map = () => {
             id: CONFIG.layerIds.satellite,
             type: 'raster',
             source: CONFIG.sourceIds.satellite,
+            layout: {
+              'visibility': 'visible', // USGS starts visible (default basemap)
+            },
+          },
+          {
+            id: CONFIG.layerIds.arcgisSatellite,
+            type: 'raster',
+            source: CONFIG.sourceIds.arcgisSatellite,
+            layout: {
+              'visibility': 'none', // ArcGIS satellite starts hidden
+            },
           },
           {
             id: CONFIG.layerIds.arcgisPlaces,
@@ -119,121 +164,64 @@ const Map = () => {
       zoom: CONFIG.map.zoom.default,
       minZoom: CONFIG.map.zoom.min,
       maxZoom: CONFIG.map.zoom.max,
+      // Disable all rotation interactions
+      dragRotate: false,           // Disables rotation via mouse drag
+      touchZoomRotate: false,      // Disables rotation via touch gestures  
+      pitchWithRotate: false,      // Prevents pitch changes during rotation
+      keyboard: false,             // Disables keyboard shortcuts (including rotation)
+      attributionControl: false,   // Disable default attribution control - we add custom one
     });
 
     // Set memory limits to reduce RAM usage
     try {
-      // Set memory optimizations
-      (map as any)._maxTileCacheSize = 50;
-      (map as any)._collectResourceTiming = false;
+      // Set memory optimizations with proper type checking
+      const mapWithPrivateProps = map as maplibregl.Map & {
+        _maxTileCacheSize?: number;
+        _collectResourceTiming?: boolean;
+        _painter?: {
+          context?: {
+            gl?: WebGLRenderingContext;
+          };
+        };
+      };
       
-      // Reduce texture cache size
-      if ((map as any)._painter) {
-        (map as any)._painter.context.gl.texParameteri((map as any)._painter.context.gl.TEXTURE_2D, (map as any)._painter.context.gl.TEXTURE_MAG_FILTER, (map as any)._painter.context.gl.LINEAR);
+      if ('_maxTileCacheSize' in mapWithPrivateProps) {
+        mapWithPrivateProps._maxTileCacheSize = 50;
       }
       
-      console.log('✅ Memory optimizations applied');
+      if ('_collectResourceTiming' in mapWithPrivateProps) {
+        mapWithPrivateProps._collectResourceTiming = false;
+      }
+      
+      // Reduce texture cache size with type checking
+      if (mapWithPrivateProps._painter?.context?.gl) {
+        const gl = mapWithPrivateProps._painter.context.gl;
+        if (gl.TEXTURE_2D && gl.TEXTURE_MAG_FILTER && gl.LINEAR) {
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        }
+      }
+      
+      // Memory optimizations applied
     } catch (error) {
-      console.warn('Could not apply all memory optimizations:', error);
+      // Could not apply all memory optimizations - continue silently
     }
 
     map.on('load', () => {
-      console.log('Map loaded successfully!');
       setMapLoaded(true);
       setMap(map);
 
       try {
-        // Initialize deck.gl overlay with hover tooltips for mountains and UNESCO sites
+        // Add collapsed attribution control for legal compliance
+        const attribution = new maplibregl.AttributionControl({
+          compact: true, // Shows only "i" button by default
+          customAttribution: []
+        });
+        map.addControl(attribution, 'bottom-right');
+
+        // Initialize deck.gl overlay with hover tooltips using centralized tooltip factory
         const deckOverlay = new MapboxOverlay({
           interleaved: false,
-          getTooltip: ({object, layer}) => {
-            if (!object || !layer?.id) {
-              return null;
-            }
-
-            // Handle mountain peaks tooltips
-            if (layer.id === 'mountain-peaks') {
-              const mountain = object;
-              const elevation = mountain.elevation.toLocaleString() + 'm';
-              
-              return {
-                html: `
-                  <div style="
-                    background: rgba(15, 23, 42, 0.95);
-                    color: white;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    border: 1px solid rgba(59, 130, 246, 0.3);
-                    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 13px;
-                    line-height: 1.4;
-                    backdrop-filter: blur(8px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-                    max-width: 200px;
-                  ">
-                    <div style="font-weight: 600; color: #e6b800; margin-bottom: 4px;">
-                      ${mountain.name}
-                    </div>
-                    <div style="color: #cbd5e1; font-size: 12px;">
-                      ${elevation} elevation
-                    </div>
-                    <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">
-                      ${mountain.range} • ${mountain.country}
-                    </div>
-                  </div>
-                `,
-                style: {
-                  backgroundColor: 'transparent',
-                  color: 'white'
-                }
-              };
-            }
-
-            // Handle UNESCO sites tooltips
-            if (layer.id === 'unesco-sites') {
-              const site = object;
-              
-              // Danger status indicator
-              const dangerStatus = site.danger === 1 ? '⚠️ Site in Danger' : '✅ Protected';
-              const dangerColor = site.danger === 1 ? '#ef4444' : '#22c55e';
-              
-              return {
-                html: `
-                  <div style="
-                    background: rgba(15, 23, 42, 0.95);
-                    color: white;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    border: 1px solid rgba(59, 130, 246, 0.3);
-                    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 13px;
-                    line-height: 1.4;
-                    backdrop-filter: blur(8px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-                    max-width: 280px;
-                  ">
-                    <div style="font-weight: 600; color: #f59e0b; margin-bottom: 6px;">
-                      ${site.name_en}
-                    </div>
-                    <div style="margin-bottom: 4px;">
-                      <span style="background: ${dangerColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 500;">
-                        ${dangerStatus}
-                      </span>
-                    </div>
-                    <div style="color: #cbd5e1; font-size: 12px;">
-                      ${site.category} • Inscribed ${site.date_inscribed}
-                    </div>
-                  </div>
-                `,
-                style: {
-                  backgroundColor: 'transparent',
-                  color: 'white'
-                }
-              };
-            }
-
-            return null;
-          },
+          getTooltip: ({object, layer}) => createLayerTooltip(object, layer),
         });
         
         // Add deck.gl overlay to map
@@ -243,12 +231,12 @@ const Map = () => {
         (map as any)._deckOverlay = deckOverlay;
 
       } catch (error) {
-        console.error('Error adding layers:', error);
+        // Error adding layers - continue silently
       }
     });
 
-    map.on('error', (e) => {
-      console.error('Map error:', e);
+    map.on('error', () => {
+      // Map error - continue silently
     });
 
     return () => {
@@ -259,17 +247,57 @@ const Map = () => {
   // UNESCO layers loaded separately due to async nature
   const unescoLayersRef = useRef<any[]>([]);
   
-  // Weather precipitation layers loaded separately due to async nature
-  const [precipitationLayers, setPrecipitationLayers] = useState<any[]>([]);
 
-  // Refactored layer management using native deck.gl patterns with useMemo
-  const layers = useMemo(() => {
-    const allLayers: any[] = [];
+  // Split large useMemo into focused hooks for better performance
+
+  // 1. Static layers that only depend on visibility states
+  const staticLayers = useMemo(() => {
+    const layers: any[] = [];
     
-    // 1. Terminator layer with native visibility and updateTriggers - direct function call
+    // UNESCO layers (async-safe)
+    if (unescoLayersRef.current) {
+      unescoLayersRef.current.forEach(layer => {
+        layers.push(layer.clone({
+          visible: showUnesco
+        }));
+      });
+    }
+    
+    // Timezone layers (async-safe)
+    if (timezoneLayers.length > 0) {
+      timezoneLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: showTimezones
+        }));
+      });
+    }
+    
+    return layers;
+  }, [showUnesco, showTimezones, timezoneLayers]);
+
+  // 2. Zoom-dependent layers
+  const zoomDependentLayers = useMemo(() => {
+    const layers: any[] = [];
+    
+    // Mountains layers change with zoom
+    const mountainsLayers = createMountainsLayers(currentZoom);
+    mountainsLayers.forEach(layer => {
+      layers.push(layer.clone({
+        visible: showMountains
+      }));
+    });
+    
+    return layers;
+  }, [currentZoom, showMountains]);
+
+  // 3. Time-dependent layers (frequent updates)
+  const timeDependentLayers = useMemo(() => {
+    const layers: any[] = [];
+    
+    // Terminator layer updates with current time
     const terminatorLayer = createTerminatorLayer(currentTime);
     if (terminatorLayer) {
-      allLayers.push(terminatorLayer.clone({
+      layers.push(terminatorLayer.clone({
         visible: showTerminator,
         updateTriggers: {
           getPath: currentTime.getTime()
@@ -277,27 +305,10 @@ const Map = () => {
       }));
     }
 
-    // 2. Mountains layers with native visibility
-    const mountainsLayers = createMountainsLayers(currentZoom);
-    mountainsLayers.forEach(layer => {
-      allLayers.push(layer.clone({
-        visible: showMountains
-      }));
-    });
-
-    // 3. UNESCO layers with native visibility (async-safe)
-    if (unescoLayersRef.current) {
-      unescoLayersRef.current.forEach(layer => {
-        allLayers.push(layer.clone({
-          visible: showUnesco
-        }));
-      });
-    }
-
-    // 4. City times layers with native visibility - moved AFTER UNESCO to render on top
+    // City times layers update every minute
     const cityTimesLayers = createCityTimesLayers(cities, currentTime);
     cityTimesLayers.forEach(layer => {
-      allLayers.push(layer.clone({
+      layers.push(layer.clone({
         visible: showCities,
         updateTriggers: {
           getText: currentTime.getMinutes(),
@@ -305,27 +316,75 @@ const Map = () => {
         }
       }));
     });
+    
+    return layers;
+  }, [currentTime, showTerminator, showCities, cities]);
 
-    // 5. Weather precipitation layers with native visibility (async-safe)
-    if (showPrecipitation && precipitationLayers.length > 0) {
-      precipitationLayers.forEach(layer => {
-        allLayers.push(layer.clone({
-          visible: showPrecipitation,
+
+  // 4. Data-dependent layers (external API data)
+  const dataDependentLayers = useMemo(() => {
+    const layers: any[] = [];
+
+
+    // ISS tracking layers
+    if (showISS && issLayers.length > 0) {
+      issLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: showISS,
+          updateTriggers: {
+            getPosition: currentTime.getTime(),
+            getText: currentTime.getTime(),
+            getPath: currentTime.getTime(),
+          }
         }));
       });
     }
 
-    console.log('🔄 Native layer management updated:', {
-      terminator: showTerminator,
-      cities: showCities,
-      mountains: showMountains,
-      unesco: showUnesco,
-      precipitation: showPrecipitation,
-      layerCount: allLayers.length
-    });
+    // Hurricane tracking layers
+    if (showHurricanes && hurricaneLayers.length > 0) {
+      hurricaneLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: showHurricanes,
+          updateTriggers: {
+            getPosition: hurricaneLastUpdate?.getTime() || currentTime.getTime(),
+            getText: hurricaneLastUpdate?.getTime() || currentTime.getTime(),
+            getAngle: Math.floor(Date.now() / 100), // Update rotation trigger every 100ms for smooth animation
+          }
+        }));
+      });
+    }
 
-    return allLayers;
-  }, [showTerminator, showCities, showMountains, showUnesco, showPrecipitation, currentTime, cities, currentZoom, weatherDataTimestamp, precipitationLayers]);
+    // Earthquake tracking layers
+    if (showEarthquakes && earthquakeLayers.length > 0) {
+      earthquakeLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: showEarthquakes,
+          updateTriggers: {
+            getPosition: earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getFillColor: earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getRadius: earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getText: earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+          }
+        }));
+      });
+    }
+    
+    return layers;
+  }, [
+    showISS, issLayers, currentTime,
+    showHurricanes, hurricaneLayers, hurricaneLastUpdate,
+    showEarthquakes, earthquakeLayers, earthquakeLastUpdate
+  ]);
+
+  // 5. Combine all layers efficiently
+  const layers = useMemo(() => {
+    return [
+      ...staticLayers,
+      ...zoomDependentLayers,
+      ...timeDependentLayers,
+      ...dataDependentLayers
+    ];
+  }, [staticLayers, zoomDependentLayers, timeDependentLayers, dataDependentLayers]);
   
   // Load UNESCO layers once
   useEffect(() => {
@@ -334,33 +393,99 @@ const Map = () => {
     });
   }, []);
 
-  // Load weather precipitation layers - Using REAL timestamps from metadata
+  // Load timezone layers when timezone layer is enabled
   useEffect(() => {
-    if (showPrecipitation && isPrecipitationLayerConfigured()) {
-      console.log('🌦️ Loading weather precipitation layers...');
-      createWeatherPrecipitationLayer().then(result => {
-        if (result && result.layers && result.layers.length > 0) {
-          console.log(`✅ Weather precipitation layers loaded successfully (${result.layers.length} tiles)`);
-          console.log(`✅ Using REAL timestamp: ${result.timestamp.toISOString()}`);
-          
-          // Update the store with the REAL download timestamp
-          setWeatherDataTimestamp(result.timestamp);
-          setPrecipitationLayers(result.layers);
+    if (showTimezones && isTimeZonesLayerConfigured()) {
+      createTimeZonesLayers().then(layers => {
+        if (layers && layers.length > 0) {
+          setTimezoneLayers(layers);
         } else {
-          console.error('❌ Failed to create weather precipitation layers');
-          setPrecipitationLayers([]);
+          setTimezoneLayers([]);
         }
       }).catch(error => {
-        console.error('❌ Error loading weather precipitation layers:', error);
-        setPrecipitationLayers([]);
+        console.error('Error loading timezone layers:', error);
+        setTimezoneLayers([]);
       });
     } else {
-      if (!showPrecipitation) {
-        console.log('🌦️ Weather precipitation layers disabled by user');
-      }
-      setPrecipitationLayers([]);
+      setTimezoneLayers([]);
     }
-  }, [showPrecipitation, setWeatherDataTimestamp]);
+  }, [showTimezones, setTimezoneLayers]);
+
+
+  // Initialize ISS Manager when ISS tracking is enabled
+  useEffect(() => {
+    if (showISS && isISSTrackingConfigured() && !issManager) {
+      initializeISSManager();
+    } else if (!showISS && issManager) {
+      destroyISSManager();
+    }
+  }, [showISS, issManager, initializeISSManager, destroyISSManager]);
+
+  // Update ISS layers when ISS manager is available
+  useEffect(() => {
+    if (showISS && issManager) {
+      try {
+        const layers = createISSLayers(currentTime, handleISSClick);
+        setISSLayers(layers);
+      } catch (error) {
+        setISSLayers([]);
+      }
+    } else {
+      setISSLayers([]);
+    }
+  }, [showISS, issManager, currentTime, setISSLayers, handleISSClick]);
+
+  // Initialize Earthquake Manager when earthquake tracking is enabled
+  useEffect(() => {
+    if (showEarthquakes && isEarthquakeLayerConfigured() && !earthquakeManager) {
+      initializeEarthquakeManager();
+    } else if (!showEarthquakes && earthquakeManager) {
+      destroyEarthquakeManager();
+    }
+  }, [showEarthquakes, earthquakeManager, initializeEarthquakeManager, destroyEarthquakeManager]);
+
+  // Update earthquake layers when earthquake manager is available
+  useEffect(() => {
+    if (showEarthquakes && earthquakeManager) {
+      try {
+        const layers = createEarthquakeLayers(currentTime, currentZoom);
+        setEarthquakeLayers(layers);
+        setEarthquakeLastUpdate(new Date());
+      } catch (error) {
+        setEarthquakeLayers([]);
+      }
+    } else {
+      setEarthquakeLayers([]);
+    }
+  }, [showEarthquakes, earthquakeManager, currentTime, currentZoom, setEarthquakeLayers, setEarthquakeLastUpdate]);
+
+  // Initialize Hurricane Manager when hurricane tracking is enabled
+  useEffect(() => {
+    if (showHurricanes && isHurricaneLayerConfigured() && !hurricaneManager) {
+      console.log('🌀 [DEBUG] Initializing Hurricane Manager from Map component...');
+      initializeHurricaneManager();
+    } else if (!showHurricanes && hurricaneManager) {
+      console.log('🌀 [DEBUG] Destroying Hurricane Manager from Map component...');
+      destroyHurricaneManager();
+    }
+  }, [showHurricanes, hurricaneManager, initializeHurricaneManager, destroyHurricaneManager]);
+
+  // Update hurricane layers when hurricane manager is available
+  useEffect(() => {
+    if (showHurricanes && hurricaneManager) {
+      console.log('🌀 [DEBUG] Creating hurricane layers with manager...');
+      try {
+        const layers = createHurricaneLayers();
+        setHurricaneLayers(layers);
+        setHurricaneLastUpdate(new Date());
+      } catch (error) {
+        console.error('❌ [ERROR] Failed to create hurricane layers:', error);
+        setHurricaneLayers([]);
+      }
+    } else {
+      setHurricaneLayers([]);
+    }
+  }, [showHurricanes, hurricaneManager, setHurricaneLayers, setHurricaneLastUpdate]);
 
   // Update deck.gl overlay with new layers
   useEffect(() => {
@@ -377,6 +502,15 @@ const Map = () => {
 
     return () => clearInterval(interval);
   }, [updateTime]);
+
+  // Separate 1-second interval for precise date/time display
+  useEffect(() => {
+    const displayInterval = setInterval(() => {
+      setDisplayTime(new Date());
+    }, 1000); // Update every second for precise display
+
+    return () => clearInterval(displayInterval);
+  }, []);
 
   // Weather timestamp is now managed by actual tile loading - no more fake timers!
   // The real timestamp comes from metadata.json when tiles are loaded
@@ -444,6 +578,9 @@ const Map = () => {
         </button>
       </div>
 
+      {/* No timezone time display - borders only */}
+
+
       {/* Right Slide Panel */}
       <div className={`fixed top-0 right-0 h-full w-80 bg-slate-900/95 backdrop-blur-lg border-l border-blue-200/20 shadow-2xl z-40 transform transition-transform duration-200 ease-out flex flex-col ${
         isMenuOpen ? 'translate-x-0' : 'translate-x-full'
@@ -456,6 +593,73 @@ const Map = () => {
         {/* Panel Content - Fixed scrolling with proper height */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
+          
+          {/* Basemap Section */}
+          <div>
+            <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Basemap</h3>
+            <div className="space-y-3">
+              
+              {/* USGS Blue Marble */}
+              <div 
+                onClick={() => setSelectedBasemap('usgs')}
+                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                  selectedBasemap === 'usgs' 
+                    ? 'bg-blue-600/30 border border-blue-400/50' 
+                    : 'bg-slate-800/50 hover:bg-slate-800/70'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-blue-100 font-medium">Blue Marble</div>
+                    <div className="text-blue-300 text-xs">USGS Natural Earth</div>
+                  </div>
+                </div>
+                {selectedBasemap === 'usgs' && (
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {/* ArcGIS Satellite */}
+              <div 
+                onClick={() => setSelectedBasemap('arcgis')}
+                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                  selectedBasemap === 'arcgis' 
+                    ? 'bg-blue-600/30 border border-blue-400/50' 
+                    : 'bg-slate-800/50 hover:bg-slate-800/70'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-green-400">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-blue-100 font-medium">Satellite Imagery</div>
+                    <div className="text-blue-300 text-xs">ArcGIS World Imagery</div>
+                  </div>
+                </div>
+                {selectedBasemap === 'arcgis' && (
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
           {/* Static Layers Section */}
           <div>
             <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Static Layers</h3>
@@ -482,6 +686,31 @@ const Map = () => {
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
                     showArcgisPlaces ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Time Zones */}
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-cyan-400">
+                      <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,15.4L16.2,16.2Z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-blue-100 font-medium">Time Zones</div>
+                    <div className="text-blue-300 text-xs">World timezone boundaries</div>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleTimezones}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                    showTimezones ? 'bg-blue-600' : 'bg-gray-600'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                    showTimezones ? 'translate-x-6' : 'translate-x-1'
                   }`} />
                 </button>
               </div>
@@ -594,43 +823,99 @@ const Map = () => {
                 </button>
               </div>
 
-            </div>
-          </div>
-
-          {/* Weather Section */}
-          <div>
-            <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Weather</h3>
-            <div className="space-y-3">
-
-              {/* Precipitation Radar */}
+              {/* ISS Tracking */}
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
                 <div className="flex items-center space-x-3">
                   <div className="w-5 h-5 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
-                      <path d="M12 3l-1.5 4.5h-3L6 9l1.5 1.5H11l1-3 1 3h3.5L18 9l-1.5-1.5h-3L12 3zm0 8.5c-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5 4.5-2 4.5-4.5-2-4.5-4.5-4.5z"/>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-red-400">
+                      <path d="M15.5 19v2h-1.77c-.34.6-.99 1-1.73 1s-1.39-.4-1.73-1H8.5v-2h1.77c.17-.3.43-.56.73-.73V17h-1c-.55 0-1-.45-1-1v-3H6v4c0 .55-.45 1-1 1H3c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h1V6h-1c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v1c0 .55-.45 1-1 1h-1v1h1c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v9c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-4h-3v3c0 .55-.45 1-1 1h-1v1.27c.3.17.56.43.73.73zM3 16v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8zm16 8v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8z"/>
                     </svg>
                   </div>
                   <div>
-                    <div className="text-blue-100 font-medium">Precipitation Radar</div>
+                    <div className="text-blue-100 font-medium">ISS Tracking</div>
                     <div className="text-blue-300 text-xs">
-                      {weatherDataTimestamp && `Updated ${weatherDataTimestamp.toLocaleTimeString()}`}
+                      {isISSLoading ? 'Loading...' : 'Real-time position & orbit'}
                     </div>
                   </div>
                 </div>
                 <button
-                  onClick={togglePrecipitation}
+                  onClick={toggleISS}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                    showPrecipitation ? 'bg-blue-600' : 'bg-gray-600'
+                    showISS ? 'bg-blue-600' : 'bg-gray-600'
                   }`}
+                  disabled={isISSLoading}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                    showPrecipitation ? 'translate-x-6' : 'translate-x-1'
+                    showISS ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Earthquake Tracking */}
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                      <path d="M12 3L2 13.09L4.5 15.6L12 8.1L19.5 15.6L22 13.09L12 3zM6.5 18L12 12.5L17.5 18L12 23.5L6.5 18z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-blue-100 font-medium">Earthquakes</div>
+                    <div className="text-blue-300 text-xs">
+                      {isEarthquakesLoading ? 'Loading...' : earthquakeLastUpdate ? `Updated ${earthquakeLastUpdate.toLocaleTimeString()}` : 'Real-time seismic data'}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Loading spinner */}
+                {isEarthquakesLoading && (
+                  <div className="w-4 h-4 border-2 border-blue-300 border-t-transparent rounded-full animate-spin mr-2"></div>
+                )}
+                
+                <button
+                  onClick={toggleEarthquakes}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                    showEarthquakes ? 'bg-blue-600' : 'bg-gray-600'
+                  }`}
+                  disabled={isEarthquakesLoading}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                    showEarthquakes ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Hurricane Tracking */}
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-orange-400">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 6c1.1 0 2 .9 2 2 0 .74-.4 1.38-1 1.73v2.27c0 .55-.45 1-1 1s-1-.45-1-1v-2.27c-.6-.35-1-.99-1-1.73 0-1.1.9-2 2-2zm0-4c4.41 0 8 3.59 8 8s-3.59 8-8 8-8-3.59-8-8 3.59-8 8-8z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-blue-100 font-medium">Hurricane Tracking</div>
+                    <div className="text-blue-300 text-xs">
+                      {isHurricanesLoading ? 'Loading...' : hurricaneLastUpdate ? `Updated ${hurricaneLastUpdate.toLocaleTimeString()}` : 'Live storm tracking'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleHurricanes}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                    showHurricanes ? 'bg-blue-600' : 'bg-gray-600'
+                  }`}
+                  disabled={isHurricanesLoading}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                    showHurricanes ? 'translate-x-6' : 'translate-x-1'
                   }`} />
                 </button>
               </div>
 
             </div>
           </div>
+
 
           {/* City Manager */}
           <CityManager />
@@ -652,6 +937,25 @@ const Map = () => {
         </div>
       </div>
 
+      {/* Date/Time Display - Bottom Center */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 p-4">
+        <div className="text-blue-100 text-xl font-bold tracking-wide antialiased text-center">
+          {displayTime.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}
+        </div>
+        <div className="text-blue-100 font-sans text-2xl font-bold tracking-wider antialiased text-center">
+          {displayTime.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          })}
+        </div>
+      </div>
+
       {/* Overlay for closing panel when clicking outside */}
       {isMenuOpen && (
         <div 
@@ -659,6 +963,9 @@ const Map = () => {
           onClick={toggleMenu}
         />
       )}
+
+      {/* ISS Video Overlay */}
+      <ISSVideoOverlay />
 
     </div>
   );

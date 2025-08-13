@@ -100,9 +100,9 @@ function createUnescoIconLayer(sites: UnescoSite[]): IconLayer {
     getPosition: (d: UnescoSite) => [d.longitude, d.latitude],
     getIcon: (d: UnescoSite) => ({
       url: getLocationPinDataUrl(d.danger),
-      width: 24,
-      height: 24,
-      anchorY: 24 // Anchor at bottom point of pin
+      width: 128,
+      height: 128,
+      anchorY: 24,
     }),
     getSize: () => 16, // Clean, readable size
     

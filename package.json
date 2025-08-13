@@ -9,9 +9,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "vite",
-    "download-tiles": "tsx src/scripts/downloadWeatherTiles.ts"
+    "download-tiles": "tsx src/scripts/downloadWeatherTiles.ts",
+    "install-clean": "npm install --silent"
   },
   "dependencies": {
+    "@arcgis/core": "^4.33.12",
     "@deck.gl/core": "^9.1.0",
     "@deck.gl/geo-layers": "^9.1.14",
     "@deck.gl/layers": "^9.1.0",

@@ -85,9 +85,9 @@ function createMountainPeaksLayer(mountains: Mountain[]): IconLayer {
     getPosition: (d: Mountain) => d.coordinates,
     getIcon: () => ({
       url: getMountainIconDataUri(),
-      width: 48,
-      height: 48,
-      anchorY: 40 // Better anchor for this icon shape
+      width: 128,
+      height: 128,
+      anchorY: 64 // Better anchor for this icon shape
     }),
     getSize: () => iconSize,
     

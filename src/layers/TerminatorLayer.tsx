@@ -5,13 +5,12 @@
  */
 
 import { PathLayer } from '@deck.gl/layers';
-import { 
-  generateTerminatorCoordinates, 
-  parseColorToRGBA, 
-  validateTerminatorCoordinates,
-  debugTerminator
-} from '@/utils/solarCalculations';
-import { CONFIG } from '@/config';
+import {
+  generateTerminatorCoordinates,
+  parseColorToRGBA,
+  validateTerminatorCoordinates
+} from '../utils/solarCalculations';
+import { CONFIG } from '../config';
 
 /**
  * Create the deck.gl PathLayer with terminator coordinates
@@ -21,7 +20,6 @@ export function createTerminatorLayer(date: Date = new Date()): PathLayer {
     const coordinates = generateCoordinatesForTerminator(date);
     
     if (!coordinates || coordinates.length === 0) {
-      console.warn('No valid terminator coordinates generated');
       return createEmptyTerminatorLayer();
     }
 
@@ -32,7 +30,7 @@ export function createTerminatorLayer(date: Date = new Date()): PathLayer {
       width: CONFIG.styles.terminator.width,
     };
 
-    console.log(`Creating terminator layer with ${coordinates.length} points at ${date.toISOString()}`);
+    // Creating terminator layer
 
     return new PathLayer({
       id: CONFIG.layerIds.terminator,
@@ -53,7 +51,6 @@ export function createTerminatorLayer(date: Date = new Date()): PathLayer {
       },
     });
   } catch (error) {
-    console.error('Error creating terminator layer:', error);
     return createEmptyTerminatorLayer();
   }
 }
@@ -71,8 +68,6 @@ function generateCoordinatesForTerminator(date: Date): Array<[number, number]> {
     
     // Validate the generated coordinates
     if (!validateTerminatorCoordinates(terminatorPoints)) {
-      console.error('Generated invalid terminator coordinates');
-      debugTerminator(date);
       return [];
     }
     
@@ -82,11 +77,8 @@ function generateCoordinatesForTerminator(date: Date): Array<[number, number]> {
       point.latitude
     ] as [number, number]);
     
-    console.log(`✅ Generated ${coordinates.length} terminator points`);
     return coordinates;
   } catch (error) {
-    console.error('Error generating terminator coordinates:', error);
-    debugTerminator(date);
     return [];
   }
 }

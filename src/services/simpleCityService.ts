@@ -3,6 +3,8 @@
  * Users can pick from popular cities, no geocoding API bullshit
  */
 
+import { safeSyncOperation } from '../utils/errorHandler';
+
 export interface City {
   id: string;
   name: string;
@@ -170,17 +172,17 @@ export const POPULAR_CITIES: City[] = [
  * Get formatted local time for a city
  */
 export function getCityLocalTime(timezone: string, currentTime: Date): string {
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
+  return safeSyncOperation(
+    () => new Intl.DateTimeFormat('en-GB', {
       timeZone: timezone,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).format(currentTime);
-  } catch {
-    return currentTime.getUTCHours().toString().padStart(2, '0') + ':' +
-           currentTime.getUTCMinutes().toString().padStart(2, '0');
-  }
+    }).format(currentTime),
+    `format time for ${timezone}`,
+    currentTime.getUTCHours().toString().padStart(2, '0') + ':' +
+    currentTime.getUTCMinutes().toString().padStart(2, '0')
+  );
 }
 
 // Manual collision logic removed - now handled by Deck.gl TextLayer collision detection
@@ -192,25 +194,26 @@ export function getCityLocalTime(timezone: string, currentTime: Date): string {
 const STORAGE_KEY = 'cityTimes_userCities';
 
 export function saveUserCities(cities: City[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cities));
-  } catch (error) {
-    console.error('Failed to save cities:', error);
-  }
+  safeSyncOperation(
+    () => localStorage.setItem(STORAGE_KEY, JSON.stringify(cities)),
+    'save user cities',
+    undefined // No meaningful fallback for void operation
+  );
 }
 
 export function loadUserCities(): City[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.every(c => c.id && c.name && c.coordinates)) {
-        return parsed;
+  return safeSyncOperation(
+    () => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every(c => c.id && c.name && c.coordinates)) {
+          return parsed;
+        }
       }
-    }
-  } catch (error) {
-    console.error('Failed to load cities:', error);
-  }
-  
-  return [...DEFAULT_CITIES];
+      return [...DEFAULT_CITIES];
+    },
+    'load user cities',
+    [...DEFAULT_CITIES]
+  );
 }

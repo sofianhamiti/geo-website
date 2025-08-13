@@ -6,11 +6,17 @@
 
 import { create } from 'zustand';
 import { City, DEFAULT_CITIES, loadUserCities, saveUserCities } from '../services/simpleCityService';
+import { ISSManager } from '../layers/ISSLayer';
+import { EarthquakeManager } from '../layers/EarthquakeLayer';
+import { HurricaneManager } from '../layers/HurricaneLayer';
 
 export interface MapState {
   // Map instance and status
   map: any | null;
   isMapLoaded: boolean;
+  
+  // Basemap selection
+  selectedBasemap: 'usgs' | 'arcgis';
   
   // Layer visibility
   showArcgisPlaces: boolean;
@@ -18,11 +24,35 @@ export interface MapState {
   showCities: boolean;
   showMountains: boolean;
   showUnesco: boolean;
+  showTimezones: boolean;
   
-  // Weather layers
-  showPrecipitation: boolean;
-  weatherDataTimestamp: Date | null;
-  isWeatherLoading: boolean;
+  
+  // ISS tracking
+  showISS: boolean;
+  issLayers: any[];
+  issManager: ISSManager | null;
+  isISSLoading: boolean;
+  
+  // ISS video overlay
+  issVideoVisible: boolean;
+  issVideoPosition: [number, number] | null;
+  
+  // Hurricane tracking
+  showHurricanes: boolean;
+  hurricaneLayers: any[];
+  hurricaneManager: HurricaneManager | null;
+  hurricaneLastUpdate: Date | null;
+  isHurricanesLoading: boolean;
+  
+  // Earthquake tracking
+  showEarthquakes: boolean;
+  earthquakeLayers: any[];
+  earthquakeManager: EarthquakeManager | null;
+  earthquakeLastUpdate: Date | null;
+  isEarthquakesLoading: boolean;
+  
+  // Timezone layers
+  timezoneLayers: any[];
   
   // Menu state
   isMenuOpen: boolean;
@@ -38,19 +68,47 @@ export interface MapState {
   // Actions
   setMap: (map: any | null) => void;
   setMapLoaded: (loaded: boolean) => void;
+  setSelectedBasemap: (basemap: 'usgs' | 'arcgis') => void;
   toggleArcgisPlaces: () => void;
   toggleTerminator: () => void;
   toggleCities: () => void;
   toggleMountains: () => void;
   toggleUnesco: () => void;
+  toggleTimezones: () => void;
   toggleMenu: () => void;
   setLastUpdate: (date: Date) => void;
   updateTime: () => void;
   
-  // Weather actions
-  togglePrecipitation: () => void;
-  setWeatherDataTimestamp: (timestamp: Date | null) => void;
-  setWeatherLoading: (loading: boolean) => void;
+  
+  // ISS actions
+  toggleISS: () => void;
+  setISSLayers: (layers: any[]) => void;
+  initializeISSManager: () => Promise<void>;
+  destroyISSManager: () => void;
+  setISSLoading: (loading: boolean) => void;
+  
+  // ISS video actions
+  setISSVideoVisible: (visible: boolean, position?: [number, number] | null) => void;
+  hideISSVideo: () => void;
+  
+  // Hurricane actions
+  toggleHurricanes: () => void;
+  setHurricaneLayers: (layers: any[]) => void;
+  initializeHurricaneManager: () => Promise<void>;
+  destroyHurricaneManager: () => void;
+  setHurricaneLastUpdate: (timestamp: Date | null) => void;
+  setHurricanesLoading: (loading: boolean) => void;
+  
+  // Earthquake actions
+  toggleEarthquakes: () => void;
+  setEarthquakeLayers: (layers: any[]) => void;
+  initializeEarthquakeManager: () => Promise<void>;
+  destroyEarthquakeManager: () => void;
+  setEarthquakeLastUpdate: (timestamp: Date | null) => void;
+  setEarthquakesLoading: (loading: boolean) => void;
+  
+  // Timezone actions
+  setTimezoneLayers: (layers: any[]) => void;
   
   // City actions
   addCity: (city: City) => void;
@@ -64,14 +122,30 @@ export const useMapStore = create<MapState>((set, get) => ({
   // Initial state
   map: null,
   isMapLoaded: false,
+  selectedBasemap: 'usgs', // Default to USGS "blue marble"
   showArcgisPlaces: false,
   showTerminator: true,
   showCities: true,
   showMountains: false,
   showUnesco: false,
-  showPrecipitation: false,
-  weatherDataTimestamp: null,
-  isWeatherLoading: false,
+  showTimezones: false,
+  showISS: false,
+  issLayers: [],
+  issManager: null,
+  isISSLoading: false,
+  issVideoVisible: false,
+  issVideoPosition: null,
+  showHurricanes: false,
+  hurricaneLayers: [],
+  hurricaneManager: null,
+  hurricaneLastUpdate: null,
+  isHurricanesLoading: false,
+  showEarthquakes: false,
+  earthquakeLayers: [],
+  earthquakeManager: null,
+  earthquakeLastUpdate: null,
+  isEarthquakesLoading: false,
+  timezoneLayers: [],
   isMenuOpen: false,
   currentTime: new Date(),
   lastUpdate: null,
@@ -82,6 +156,32 @@ export const useMapStore = create<MapState>((set, get) => ({
   setMap: (map) => set({ map }),
   
   setMapLoaded: (loaded) => set({ isMapLoaded: loaded }),
+  
+  setSelectedBasemap: (basemap) => {
+    const { map } = get();
+    if (map && map.getLayer) {
+      try {
+        // Hide both basemap layers first
+        if (map.getLayer('satellite-layer')) {
+          map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+        }
+        if (map.getLayer('arcgis-satellite-layer')) {
+          map.setLayoutProperty('arcgis-satellite-layer', 'visibility', 'none');
+        }
+        
+        // Show the selected basemap
+        const layerId = basemap === 'usgs' ? 'satellite-layer' : 'arcgis-satellite-layer';
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
+        
+        // Basemap switched successfully
+      } catch (error) {
+        // Error switching basemap - continue silently
+      }
+    }
+    set({ selectedBasemap: basemap });
+  },
   
   toggleArcgisPlaces: () => {
     const { map, showArcgisPlaces } = get();
@@ -102,29 +202,31 @@ export const useMapStore = create<MapState>((set, get) => ({
   toggleTerminator: () => {
     const currentState = get().showTerminator;
     const newState = !currentState;
-    console.log('✅ Terminator toggled:', { currentState, newState }, '- Menu stays open');
     set({ showTerminator: newState });
   },
   
   toggleCities: () => {
     const currentState = get().showCities;
     const newState = !currentState;
-    console.log('✅ Cities toggled:', { currentState, newState }, '- Menu stays open');
     set({ showCities: newState });
   },
   
   toggleMountains: () => {
     const currentState = get().showMountains;
     const newState = !currentState;
-    console.log('✅ Mountains toggled:', { currentState, newState }, '- Menu stays open');
     set({ showMountains: newState });
   },
   
   toggleUnesco: () => {
     const currentState = get().showUnesco;
     const newState = !currentState;
-    console.log('✅ UNESCO sites toggled:', { currentState, newState }, '- Menu stays open');
     set({ showUnesco: newState });
+  },
+  
+  toggleTimezones: () => {
+    const currentState = get().showTimezones;
+    const newState = !currentState;
+    set({ showTimezones: newState });
   },
   
   toggleMenu: () => {
@@ -143,22 +245,196 @@ export const useMapStore = create<MapState>((set, get) => ({
     console.log('Centralized time updated:', now.toISOString());
   },
 
-  // Weather actions
-  togglePrecipitation: () => {
-    const currentState = get().showPrecipitation;
+
+  // ISS actions
+  toggleISS: () => {
+    const currentState = get().showISS;
     const newState = !currentState;
-    console.log('✅ Precipitation toggled:', { currentState, newState }, '- Menu stays open');
-    set({ showPrecipitation: newState });
+    
+    if (!newState) {
+      // If disabling ISS, cleanup manager
+      const { issManager } = get();
+      if (issManager) {
+        issManager.destroy();
+        set({ issManager: null, issLayers: [] });
+      }
+    }
+    
+    set({ showISS: newState });
   },
 
-  setWeatherDataTimestamp: (timestamp) => {
-    set({ weatherDataTimestamp: timestamp });
-    console.log('✅ Weather data timestamp updated:', timestamp?.toISOString());
+  setISSLayers: (layers) => {
+    set({ issLayers: layers });
   },
 
-  setWeatherLoading: (loading) => {
-    set({ isWeatherLoading: loading });
-    console.log('✅ Weather loading state:', loading);
+  initializeISSManager: async () => {
+    const { issManager } = get();
+    if (issManager) return; // Already initialized
+
+    try {
+      set({ isISSLoading: true });
+      const manager = new ISSManager();
+      await manager.initialize();
+      set({ issManager: manager, isISSLoading: false });
+    } catch (error) {
+      set({ isISSLoading: false });
+    }
+  },
+
+  destroyISSManager: () => {
+    const { issManager } = get();
+    if (issManager) {
+      issManager.destroy();
+      set({ issManager: null, issLayers: [], showISS: false });
+    }
+  },
+
+  setISSLoading: (loading) => {
+    set({ isISSLoading: loading });
+  },
+
+  // ISS video actions
+  setISSVideoVisible: (visible, position = null) => {
+    set({ 
+      issVideoVisible: visible, 
+      issVideoPosition: position 
+    });
+    console.log('✅ ISS video visibility:', visible, position ? `at position [${position[0]}, ${position[1]}]` : '');
+  },
+
+  hideISSVideo: () => {
+    set({ 
+      issVideoVisible: false, 
+      issVideoPosition: null 
+    });
+    console.log('✅ ISS video hidden');
+  },
+
+  // Hurricane actions
+  toggleHurricanes: () => {
+    const currentState = get().showHurricanes;
+    const newState = !currentState;
+    console.log('✅ Hurricane tracking toggled:', { currentState, newState }, '- Menu stays open');
+    
+    if (!newState) {
+      // If disabling hurricanes, cleanup manager
+      const { hurricaneManager } = get();
+      if (hurricaneManager) {
+        hurricaneManager.destroy();
+        set({ hurricaneManager: null, hurricaneLayers: [] });
+      }
+    }
+    
+    set({ showHurricanes: newState });
+  },
+
+  setHurricaneLayers: (layers) => {
+    set({ hurricaneLayers: layers });
+    console.log('✅ Hurricane layers updated:', layers.length, 'layers');
+  },
+
+  initializeHurricaneManager: async () => {
+    const { hurricaneManager } = get();
+    if (hurricaneManager) {
+      console.log('🌀 Hurricane Manager already initialized');
+      return; // Already initialized
+    }
+
+    try {
+      console.log('🌀 [DEBUG] Initializing Hurricane Manager...');
+      set({ isHurricanesLoading: true });
+      const manager = new HurricaneManager();
+      await manager.initialize();
+      set({ hurricaneManager: manager, isHurricanesLoading: false });
+      console.log('✅ Hurricane Manager initialized successfully');
+    } catch (error) {
+      set({ isHurricanesLoading: false });
+      console.error('❌ Failed to initialize Hurricane Manager:', error);
+      throw error;
+    }
+  },
+
+  destroyHurricaneManager: () => {
+    const { hurricaneManager } = get();
+    if (hurricaneManager) {
+      hurricaneManager.destroy();
+      set({ hurricaneManager: null, hurricaneLayers: [], showHurricanes: false });
+      console.log('✅ Hurricane Manager destroyed');
+    }
+  },
+
+  setHurricaneLastUpdate: (timestamp) => {
+    set({ hurricaneLastUpdate: timestamp });
+    console.log('✅ Hurricane last update timestamp:', timestamp?.toISOString());
+  },
+
+  setHurricanesLoading: (loading) => {
+    set({ isHurricanesLoading: loading });
+    console.log('✅ Hurricane loading state:', loading);
+  },
+
+  // Earthquake actions
+  toggleEarthquakes: () => {
+    const currentState = get().showEarthquakes;
+    const newState = !currentState;
+    console.log('✅ Earthquake tracking toggled:', { currentState, newState }, '- Menu stays open');
+    
+    if (!newState) {
+      // If disabling earthquakes, cleanup manager
+      const { earthquakeManager } = get();
+      if (earthquakeManager) {
+        earthquakeManager.destroy();
+        set({ earthquakeManager: null, earthquakeLayers: [] });
+      }
+    }
+    
+    set({ showEarthquakes: newState });
+  },
+
+  setEarthquakeLayers: (layers) => {
+    set({ earthquakeLayers: layers });
+    console.log('✅ Earthquake layers updated:', layers.length, 'layers');
+  },
+
+  initializeEarthquakeManager: async () => {
+    const { earthquakeManager } = get();
+    if (earthquakeManager) return; // Already initialized
+
+    try {
+      set({ isEarthquakesLoading: true });
+      const manager = new EarthquakeManager();
+      await manager.initialize();
+      set({ earthquakeManager: manager, isEarthquakesLoading: false });
+      console.log('✅ Earthquake Manager initialized successfully');
+    } catch (error) {
+      set({ isEarthquakesLoading: false });
+      console.error('❌ Failed to initialize Earthquake Manager:', error);
+    }
+  },
+
+  destroyEarthquakeManager: () => {
+    const { earthquakeManager } = get();
+    if (earthquakeManager) {
+      earthquakeManager.destroy();
+      set({ earthquakeManager: null, earthquakeLayers: [], showEarthquakes: false });
+      console.log('✅ Earthquake Manager destroyed');
+    }
+  },
+
+  setEarthquakeLastUpdate: (timestamp) => {
+    set({ earthquakeLastUpdate: timestamp });
+    console.log('✅ Earthquake last update timestamp:', timestamp?.toISOString());
+  },
+
+  setEarthquakesLoading: (loading) => {
+    set({ isEarthquakesLoading: loading });
+    console.log('✅ Earthquake loading state:', loading);
+  },
+
+  // Timezone actions
+  setTimezoneLayers: (layers) => {
+    set({ timezoneLayers: layers });
+    console.log('✅ Timezone layers updated:', layers.length, 'layers');
   },
 
   // City management

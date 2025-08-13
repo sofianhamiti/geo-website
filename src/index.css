@@ -50,6 +50,8 @@ html, body, #root {
   color: rgba(255, 255, 255, 0.7) !important;
   font-size: 11px !important;
   padding: 4px 8px !important;
+  z-index: 50 !important;
+  position: relative !important;
 }
 
 .maplibregl-ctrl-attrib a {
