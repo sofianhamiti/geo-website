@@ -74,21 +74,12 @@ async function fetchISSTrajectory(): Promise<ISSTrajectoryPoint[]> {
   }
   
   const timestampQuery = timestamps.join(',');
-  console.log(`🛰️ Requesting ISS trajectory with ${timestamps.length} points`);
-  
+
   const url = `${CONFIG.styles.iss.apiBaseUrl}${CONFIG.styles.iss.satelliteId}/positions?timestamps=${timestampQuery}`;
   const response = await fetch(url);
   
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unable to read error response');
-    console.error('❌ ISS trajectory API error details:', {
-      status: response.status,
-      statusText: response.statusText,
-      url: url.substring(0, 200) + (url.length > 200 ? '...' : ''),
-      urlLength: url.length,
-      timestampCount: timestamps.length,
-      errorResponse: errorText
-    });
     throw new Error(`ISS trajectory API error: ${response.status} ${response.statusText} (${timestamps.length} timestamps requested)`);
   }
   
@@ -100,8 +91,6 @@ async function fetchISSTrajectory(): Promise<ISSTrajectoryPoint[]> {
  */
 async function updateISSData(): Promise<void> {
   try {
-    console.log('🛰️ Fetching ISS data...');
-    
     // Fetch both current position and trajectory
     const [currentPosition, trajectory] = await Promise.all([
       fetchISSPosition(),
@@ -115,49 +104,24 @@ async function updateISSData(): Promise<void> {
       error: null,
     };
     
-    console.log(`✅ ISS data updated: Position [${currentPosition.latitude.toFixed(2)}, ${currentPosition.longitude.toFixed(2)}], Trajectory: ${trajectory.length} points`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     issDataCache.error = errorMessage;
-    console.error('❌ Failed to fetch ISS data:', errorMessage);
   }
 }
 
 /**
- * ISS Manager class to handle data updates and layer creation
+ * ISS Manager class using BaseDataManager
  */
-export class ISSManager {
-  private updateInterval: NodeJS.Timeout | null = null;
-  private isInitialized = false;
+import { BaseDataManager } from '../utils/BaseDataManager';
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
-    
-    // Initial data fetch
-    await updateISSData();
-    
-    // Set up automatic updates using config interval
-    this.updateInterval = setInterval(() => {
-      updateISSData().catch(error => {
-        console.error('ISS update error:', error);
-      });
-    }, CONFIG.styles.iss.updateIntervalMs);
-    
-    this.isInitialized = true;
-    console.log('✅ ISS Manager initialized');
-  }
-
-  destroy(): void {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
-    this.isInitialized = false;
-    console.log('✅ ISS Manager destroyed');
-  }
-
-  getData(): ISSLayerData {
-    return issDataCache;
+export class ISSManager extends BaseDataManager<ISSLayerData> {
+  constructor() {
+    super({
+      updateFunction: updateISSData,
+      updateIntervalMs: CONFIG.styles.iss.updateIntervalMs,
+      getDataCache: () => issDataCache
+    });
   }
 }
 

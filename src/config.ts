@@ -245,7 +245,10 @@ export const CONFIG = {
       significantThreshold: 4.5, // M4.5+ considered significant
     },
     timezones: {
-      // API Configuration
+      // Local data configuration (primary)
+      dataPath: '/geo-website/data/world-timezones.geojson',
+      
+      // API Configuration (fallback)
       serviceUrl: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Time_Zones/FeatureServer',
 
       // Visual styling

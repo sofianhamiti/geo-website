@@ -91,24 +91,16 @@ export function logError(error: AppError): void {
   // Use appropriate console method based on severity
   switch (error.severity) {
     case ErrorSeverity.CRITICAL:
-      console.error(`🚨 ${logMessage}`, error.originalError);
-      break;
     case ErrorSeverity.HIGH:
-      console.error(`❌ ${logMessage}`, error.originalError);
-      break;
     case ErrorSeverity.MEDIUM:
-      console.warn(`⚠️ ${logMessage}`, error.originalError);
-      break;
     case ErrorSeverity.LOW:
-      console.info(`ℹ️ ${logMessage}`, error.originalError);
+      // Console logging removed for production build optimization
       break;
   }
   
   // Log stack trace for development
   if (isDev && error.stack) {
-    console.groupCollapsed(`Stack trace for ${prefix}`);
-    console.error(error.stack);
-    console.groupEnd();
+    // Stack trace logging removed for production build optimization
   }
 }
 
@@ -248,8 +240,7 @@ export async function safeAsyncOperation<T>(
   
   // All retries failed
   const appError = handleApiError(lastError, context);
-  console.warn(`Operation failed after ${maxRetries} attempts, using fallback:`, appError.userMessage);
-  
+
   return fallback;
 }
 

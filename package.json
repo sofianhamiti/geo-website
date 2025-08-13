@@ -13,18 +13,13 @@
     "install-clean": "npm install --silent"
   },
   "dependencies": {
-    "@arcgis/core": "^4.33.12",
     "@deck.gl/core": "^9.1.0",
     "@deck.gl/geo-layers": "^9.1.14",
     "@deck.gl/layers": "^9.1.0",
     "@deck.gl/mapbox": "^9.1.0",
     "@types/papaparse": "^5.3.16",
-    "axios": "^1.11.0",
-    "chalk": "^5.5.0",
-    "cli-progress": "^3.12.0",
     "d3-force": "^3.0.0",
     "date-fns": "^4.1.0",
-    "fs-extra": "^11.3.1",
     "maplibre-gl": "^5.0.0",
     "p-limit": "^6.2.0",
     "papaparse": "^5.5.3",
@@ -34,9 +29,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@types/cli-progress": "^3.11.6",
     "@types/d3-force": "^3.0.10",
-    "@types/fs-extra": "^11.0.4",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@types/suncalc": "^1.9.2",

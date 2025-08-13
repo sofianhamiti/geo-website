@@ -1,16 +1,15 @@
 /**
- * Time Zones Layer using ArcGIS World Time Zones Feature Service
- * Displays world timezone boundaries with UTC offset-based coloring
- * Uses GeoJSON + PolygonLayer for full styling control
+ * Time Zones Layer - Local-first with ArcGIS API fallback
+ * Loads timezone boundary data from local GeoJSON file for optimal performance,
+ * with automatic fallback to ArcGIS World Time Zones service if needed.
+ * Displays world timezone boundaries with UTC offset-based coloring.
  */
 
 import { PolygonLayer, TextLayer } from '@deck.gl/layers';
 import { CONFIG } from '../config';
 
-// Cache for timezone data to avoid repeated API calls
+// Simple cache for processed timezone data
 let timezonesCache: any[] | null = null;
-let cacheTimestamp: number = 0;
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Create the deck.gl PolygonLayer with timezone polygons only
@@ -42,82 +41,102 @@ export function createTimeZonesLayers(): Promise<PolygonLayer[]> {
       return [timeZonesLayer];
     })
     .catch(error => {
-      console.error('Error creating timezone layers:', error);
       return [createEmptyTimeZonesLayer()];
     });
 }
 
 /**
- * Fetch timezone data from ArcGIS World Time Zones Feature Service
+ * Fetch timezone data from local file with ArcGIS API fallback
  */
 async function fetchTimeZonesData(): Promise<any[]> {
   try {
-    // Check cache first
-    const now = Date.now();
-    if (timezonesCache && (now - cacheTimestamp) < CACHE_DURATION) {
+    // Return cached data if available
+    if (timezonesCache) {
       return timezonesCache;
     }
 
-    // Fetch from ArcGIS REST API - get ALL records, not just 1000
+    // Try local file first
+    try {
+      const response = await fetch(CONFIG.styles.timezones.dataPath);
+      
+      if (response.ok) {
+        const geojsonData = await response.json();
+        
+        if (geojsonData.features && geojsonData.features.length > 0) {
+          const processedData = processGeoJsonFeatures(geojsonData);
+          timezonesCache = processedData;
+          return processedData;
+        }
+      }
+    } catch (localFileError) {
+      console.warn('Failed to load local timezone data, falling back to API:', localFileError);
+    }
+
+    // Fallback to ArcGIS API
     const url = `${CONFIG.styles.timezones.serviceUrl}/0/query?` + 
       'where=1%3D1&' +
       'outFields=*&' +
       'outSR=4326&' +
       'f=geojson&' +
-      'resultRecordCount=10000'; // Increased limit to get all timezones
+      'resultRecordCount=10000';
 
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`API error! status: ${response.status}`);
     }
 
     const geojsonData = await response.json();
     
     if (!geojsonData.features || geojsonData.features.length === 0) {
-      throw new Error('No timezone features found in response');
+      throw new Error('No timezone features found in API response');
     }
 
-    // Transform GeoJSON features to deck.gl format - handle MultiPolygons properly
-    const processedData: any[] = [];
-    
-    geojsonData.features.forEach((feature: any) => {
-      if (feature.geometry.type === 'Polygon') {
-        processedData.push({
-          coordinates: feature.geometry.coordinates,
-          properties: {
-            ...feature.properties,
-            UTC_OFFSET: parseUtcOffset(feature.properties.ZONE || feature.properties.UTC_OFFSET || feature.properties.GMT_OFFSET || 0),
-            NAME: feature.properties.ZONE_NAME || feature.properties.NAME || feature.properties.TIMEZONE || 'Unknown'
-          }
-        });
-      } else if (feature.geometry.type === 'MultiPolygon') {
-        // For MultiPolygon, create separate entries for each polygon to ensure all parts are rendered
-        feature.geometry.coordinates.forEach((polygonCoords: any, index: number) => {
-          processedData.push({
-            coordinates: polygonCoords,
-            properties: {
-              ...feature.properties,
-              UTC_OFFSET: parseUtcOffset(feature.properties.ZONE || feature.properties.UTC_OFFSET || feature.properties.GMT_OFFSET || 0),
-              NAME: (feature.properties.ZONE_NAME || feature.properties.NAME || feature.properties.TIMEZONE || 'Unknown') + (index > 0 ? ` (${index + 1})` : ''),
-              MULTI_PART: index + 1,
-              TOTAL_PARTS: feature.geometry.coordinates.length
-            }
-          });
-        });
-      }
-    });
-
-    // Cache the processed data
+    const processedData = processGeoJsonFeatures(geojsonData);
     timezonesCache = processedData;
-    cacheTimestamp = now;
 
     return processedData;
 
   } catch (error) {
-    console.error('Error fetching timezone data:', error);
+    console.error('Failed to load timezone data:', error);
     return [];
   }
+}
+
+/**
+ * Process GeoJSON features into deck.gl format
+ */
+function processGeoJsonFeatures(geojsonData: any): any[] {
+  const processedData: any[] = [];
+  
+  geojsonData.features.forEach((feature: any) => {
+    if (feature.geometry.type === 'Polygon') {
+      processedData.push({
+        coordinates: feature.geometry.coordinates,
+        properties: {
+          ...feature.properties,
+          UTC_OFFSET: parseUtcOffset(feature.properties.ZONE || feature.properties.UTC_OFFSET || feature.properties.GMT_OFFSET || 0),
+          NAME: feature.properties.ZONE_NAME || feature.properties.NAME || feature.properties.TIMEZONE || 'Unknown'
+        }
+      });
+    } else if (feature.geometry.type === 'MultiPolygon') {
+      // For MultiPolygon, create separate entries for each polygon to ensure all parts are rendered
+      feature.geometry.coordinates.forEach((polygonCoords: any, index: number) => {
+        processedData.push({
+          coordinates: polygonCoords,
+          properties: {
+            ...feature.properties,
+            UTC_OFFSET: parseUtcOffset(feature.properties.ZONE || feature.properties.UTC_OFFSET || feature.properties.GMT_OFFSET || 0),
+            NAME: (feature.properties.ZONE_NAME || feature.properties.NAME || feature.properties.TIMEZONE || 'Unknown') + (index > 0 ? ` (${index + 1})` : ''),
+            MULTI_PART: index + 1,
+            TOTAL_PARTS: feature.geometry.coordinates.length
+          }
+        });
+      });
+    }
+  });
+
+  return processedData;
 }
 
 /**
@@ -151,10 +170,10 @@ function createEmptyTimeZonesLayer(): PolygonLayer {
 }
 
 /**
- * Check if timezone layer is properly configured
+ * Check if timezone layer is properly configured (local file or API)
  */
 export function isTimeZonesLayerConfigured(): boolean {
-  return Boolean(CONFIG.styles.timezones?.serviceUrl);
+  return Boolean(CONFIG.styles.timezones?.dataPath || CONFIG.styles.timezones?.serviceUrl);
 }
 
 /**
@@ -256,7 +275,6 @@ export function createTimeZoneTextLayers(currentTime: Date): Promise<TextLayer[]
       return [textLayer];
     })
     .catch(error => {
-      console.error('Error creating timezone text layers:', error);
       return [];
     });
 }
@@ -362,7 +380,6 @@ export function getTimezoneTextData(currentTime: Date): Promise<any[]> {
       return textData;
     })
     .catch(error => {
-      console.error('Error getting timezone text data:', error);
       return [];
     });
 }
@@ -372,5 +389,4 @@ export function getTimezoneTextData(currentTime: Date): Promise<any[]> {
  */
 export function clearTimeZonesCache(): void {
   timezonesCache = null;
-  cacheTimestamp = 0;
 }

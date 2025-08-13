@@ -32,15 +32,10 @@ async function loadUnescoSitesFromCSV(): Promise<UnescoSite[]> {
 
   try {
     const csvUrl = './data/wold-heritage-sites-2025.csv';
-    console.log('🏛️ Loading UNESCO sites from local CSV...');
-    console.log('🏛️ CSV URL:', csvUrl);
-    console.log('🏛️ Current location:', window.location.href);
-    
+
     // Fetch the local CSV file
     const response = await fetch(csvUrl);
-    console.log('🏛️ CSV response status:', response.status, response.statusText);
-    console.log('🏛️ CSV response URL:', response.url);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to load CSV: ${response.status} ${response.statusText} at ${response.url}`);
     }
@@ -56,7 +51,7 @@ async function loadUnescoSitesFromCSV(): Promise<UnescoSite[]> {
     });
     
     if (parseResult.errors.length > 0) {
-      console.warn('⚠️ CSV parsing errors:', parseResult.errors);
+      // CSV parsing had errors but continue with valid data
     }
     
     // Filter out rows with missing coordinates
@@ -67,12 +62,10 @@ async function loadUnescoSitesFromCSV(): Promise<UnescoSite[]> {
     );
     
     unescoSitesCache = validSites;
-    console.log(`✅ Loaded ${validSites.length} UNESCO sites from CSV`);
-    
+
     return validSites;
     
   } catch (error) {
-    console.error('❌ Failed to load UNESCO CSV:', error);
     unescoSitesCache = [];
     return [];
   }
@@ -127,11 +120,8 @@ export async function createUnescoLayers(): Promise<Layer[]> {
   const allSites = await loadUnescoSitesFromCSV();
   
   if (allSites.length === 0) {
-    console.warn('⚠️ No UNESCO sites loaded from CSV');
     return [];
   }
-
-  console.log(`🏛️ Displaying ${allSites.length} UNESCO sites from CSV`);
 
   return [
     createUnescoIconLayer(allSites)

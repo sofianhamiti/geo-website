@@ -20,8 +20,6 @@ export function generateTerminatorCoordinates(
 ): TerminatorPoint[] {
   const points: TerminatorPoint[] = [];
   
-  console.log(`Generating terminator for date: ${date.toISOString()}`);
-  
   // Generate points along longitudes
   for (let i = 0; i <= resolution; i++) {
     const longitude = (i * 360 / resolution) - 180;
@@ -31,17 +29,9 @@ export function generateTerminatorCoordinates(
       points.push({ longitude, latitude });
       
       // Debug: log first few points
-      if (i < 5) {
-        console.log(`Point ${i}: lng=${longitude.toFixed(2)}, lat=${latitude.toFixed(2)}`);
-      }
     }
   }
   
-  console.log(`Generated ${points.length} terminator points`);
-  if (points.length > 0) {
-    const latRange = [Math.min(...points.map(p => p.latitude)), Math.max(...points.map(p => p.latitude))];
-    console.log(`Latitude range: ${latRange[0].toFixed(2)} to ${latRange[1].toFixed(2)}`);
-  }
   
   return points;
 }
@@ -148,28 +138,3 @@ export function validateTerminatorCoordinates(coordinates: TerminatorPoint[]): b
   );
 }
 
-/**
- * Debug function to log terminator information
- */
-export function debugTerminator(date: Date = new Date()) {
-  console.log('=== Terminator Debug Info ===');
-  console.log('Date:', date.toISOString());
-  
-  // Test a few key points
-  const testPoints = [
-    { lat: 0, lng: 0, name: 'Greenwich' },
-    { lat: 40.7, lng: -74, name: 'New York' },
-    { lat: 51.5, lng: 0, name: 'London' }
-  ];
-  
-  testPoints.forEach(point => {
-    const solar = getSolarPosition(date, point.lat, point.lng);
-    const times = getSunTimes(date, point.lat, point.lng);
-    console.log(`${point.name}: altitude=${solar.altitude.toFixed(2)}°, sunrise=${times.sunrise?.toISOString()}`);
-  });
-  
-  const coordinates = generateTerminatorCoordinates(date, 36); // Lower resolution for debug
-  console.log(`Generated ${coordinates.length} terminator points`);
-  console.log('First 5 points:', coordinates.slice(0, 5));
-  console.log('Validation:', validateTerminatorCoordinates(coordinates));
-}

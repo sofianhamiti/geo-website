@@ -73,7 +73,7 @@ const ISSVideoOverlay: React.FC<ISSVideoOverlayProps> = () => {
           }
         }
       } catch (error) {
-        console.log('Could not update video position:', error);
+        // Silent error handling for video position updates
       }
     };
 
@@ -120,7 +120,6 @@ const ISSVideoOverlay: React.FC<ISSVideoOverlayProps> = () => {
 
   // Handle iframe load
   const handleIframeLoad = () => {
-    console.log('🛰️ ISS video iframe loaded');
     setIsVideoLoaded(true);
   };
 

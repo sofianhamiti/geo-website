@@ -242,7 +242,6 @@ export const useMapStore = create<MapState>((set, get) => ({
       currentTime: now,
       lastUpdate: now
     });
-    console.log('Centralized time updated:', now.toISOString());
   },
 
 
@@ -303,11 +302,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   },
 
   hideISSVideo: () => {
-    set({ 
-      issVideoVisible: false, 
-      issVideoPosition: null 
+    set({
+      issVideoVisible: false,
+      issVideoPosition: null
     });
-    console.log('✅ ISS video hidden');
   },
 
   // Hurricane actions
@@ -359,7 +357,6 @@ export const useMapStore = create<MapState>((set, get) => ({
     if (hurricaneManager) {
       hurricaneManager.destroy();
       set({ hurricaneManager: null, hurricaneLayers: [], showHurricanes: false });
-      console.log('✅ Hurricane Manager destroyed');
     }
   },
 
@@ -405,10 +402,8 @@ export const useMapStore = create<MapState>((set, get) => ({
       const manager = new EarthquakeManager();
       await manager.initialize();
       set({ earthquakeManager: manager, isEarthquakesLoading: false });
-      console.log('✅ Earthquake Manager initialized successfully');
     } catch (error) {
       set({ isEarthquakesLoading: false });
-      console.error('❌ Failed to initialize Earthquake Manager:', error);
     }
   },
 
@@ -417,7 +412,6 @@ export const useMapStore = create<MapState>((set, get) => ({
     if (earthquakeManager) {
       earthquakeManager.destroy();
       set({ earthquakeManager: null, earthquakeLayers: [], showEarthquakes: false });
-      console.log('✅ Earthquake Manager destroyed');
     }
   },
 
@@ -473,6 +467,5 @@ export const useMapStore = create<MapState>((set, get) => ({
   loadSavedCities: () => {
     const savedCities = loadUserCities();
     set({ cities: savedCities });
-    console.log('✅ Loaded saved cities:', savedCities.length);
   },
 }));

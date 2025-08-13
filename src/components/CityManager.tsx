@@ -46,7 +46,6 @@ async function geocodeCity(cityName: string): Promise<City | null> {
     };
     
   } catch (error) {
-    console.error('Geocoding error:', error);
     return null;
   }
 }
@@ -105,7 +104,6 @@ export const CityManager = () => {
       
     } catch (err) {
       setError('Failed to lookup city. Try again.');
-      console.error('City lookup error:', err);
     } finally {
       setIsLoading(false);
     }

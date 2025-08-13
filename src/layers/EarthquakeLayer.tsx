@@ -88,8 +88,7 @@ const EARTHQUAKE_EPICENTER_ICON = `data:image/svg+xml;base64,${btoa(CONFIG.style
  */
 async function fetchEarthquakeData(): Promise<USGSEarthquakeResponse> {
   const url = `${CONFIG.styles.earthquakes.apiBaseUrl}${CONFIG.styles.earthquakes.endpoint}`;
-  console.log('🌍 Fetching earthquake data from:', url);
-  
+
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`USGS API error: ${response.status} ${response.statusText}`);
@@ -118,8 +117,6 @@ function validateEarthquakeFeature(feature: USGSEarthquakeFeature): boolean {
 async function updateEarthquakeData(): Promise<void> {
   const result = await safeAsyncOperation(
     async () => {
-      console.log('🌍 Fetching earthquake data from USGS...');
-      
       const data = await fetchEarthquakeData();
       
       // Validate response structure
@@ -147,8 +144,6 @@ async function updateEarthquakeData(): Promise<void> {
         significantCount
       };
       
-      console.log(`✅ Earthquake data updated: ${limitedEarthquakes.length} events (${significantCount} significant M${CONFIG.styles.earthquakes.significantThreshold}+)`);
-      
       return newData;
     },
     'fetch earthquake data from USGS API',
@@ -166,48 +161,17 @@ async function updateEarthquakeData(): Promise<void> {
 }
 
 /**
- * EarthquakeManager class to handle data updates and layer creation
+ * EarthquakeManager class using BaseDataManager
  */
-export class EarthquakeManager {
-  private updateInterval: NodeJS.Timeout | null = null;
-  private isInitialized = false;
-  private lastFetchTime: Date | null = null;
+import { BaseDataManager } from '../utils/BaseDataManager';
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
-    
-    // Initial data fetch
-    await updateEarthquakeData();
-    this.lastFetchTime = new Date();
-    
-    // Set up automatic updates using config interval
-    this.updateInterval = setInterval(() => {
-      updateEarthquakeData().then(() => {
-        this.lastFetchTime = new Date();
-      });
-    }, CONFIG.styles.earthquakes.updateIntervalMs);
-    
-    this.isInitialized = true;
-    console.log('✅ Earthquake Manager initialized');
-  }
-
-  destroy(): void {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
-    this.isInitialized = false;
-    this.lastFetchTime = null;
-    console.log('✅ Earthquake Manager destroyed');
-  }
-
-  getData(): EarthquakeLayerData {
-    return earthquakeDataCache;
-  }
-
-  getNextUpdateTime(): Date | null {
-    if (!this.lastFetchTime) return null;
-    return new Date(this.lastFetchTime.getTime() + CONFIG.styles.earthquakes.updateIntervalMs);
+export class EarthquakeManager extends BaseDataManager<EarthquakeLayerData> {
+  constructor() {
+    super({
+      updateFunction: updateEarthquakeData,
+      updateIntervalMs: CONFIG.styles.earthquakes.updateIntervalMs,
+      getDataCache: () => earthquakeDataCache
+    });
   }
 }
 
@@ -307,7 +271,6 @@ export function createEarthquakeLayers(currentTime: Date, currentZoom: number = 
       },
     }));
 
-    console.log(`🌍 Created earthquake layer with ${filteredEarthquakes.length} epicenter icons (zoom: ${currentZoom})`);
   }
 
   return layers;
@@ -320,9 +283,3 @@ export function isEarthquakeLayerConfigured(): boolean {
   return true;
 }
 
-/**
- * Get the refresh interval (1 hour)
- */
-export function getEarthquakeRefreshInterval(): number {
-  return CONFIG.styles.earthquakes.updateIntervalMs;
-}

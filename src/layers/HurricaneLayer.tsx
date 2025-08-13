@@ -5,8 +5,6 @@
 
 import { IconLayer, TextLayer, PolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
-import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
-import Query from '@arcgis/core/rest/support/Query';
 import { CONFIG } from '../config';
 import { safeAsyncOperation } from '../utils/errorHandler';
 
@@ -92,81 +90,44 @@ const hurricaneSvgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="128"
     <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
 </svg>`;
 
-// Create FeatureLayers for hurricane data
-let hurricanePositionLayer: FeatureLayer | null = null;
-let hurricaneTrajectoryLayer: FeatureLayer | null = null;
-let hurricaneTrackLayer: FeatureLayer | null = null;
-
 /**
- * Initialize Hurricane FeatureLayers
+ * Check if hurricane data needs refreshing
  */
-function initializeHurricaneLayers() {
-  if (hurricanePositionLayer && hurricaneTrajectoryLayer && hurricaneTrackLayer) {
-    return;
-  }
-
-  try {
-    // Layer 0: Trajectory Cones
-    hurricaneTrajectoryLayer = new FeatureLayer({
-      url: `${CONFIG.weather.hurricanes.serviceUrl}/0`,
-      refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
-      outFields: ['*'],
-      title: 'Hurricane Trajectory Cones'
-    });
-
-    // Layer 1: Observed Positions
-    hurricanePositionLayer = new FeatureLayer({
-      url: `${CONFIG.weather.hurricanes.serviceUrl}/1`,
-      refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
-      outFields: ['*'],
-      title: 'Hurricane Positions'
-    });
-
-    // Layer 2: Forecast Tracks
-    hurricaneTrackLayer = new FeatureLayer({
-      url: `${CONFIG.weather.hurricanes.serviceUrl}/2`,
-      refreshInterval: CONFIG.weather.hurricanes.refreshIntervalMinutes,
-      outFields: ['*'],
-      title: 'Hurricane Forecast Tracks'
-    });
-  } catch (error) {
-    console.error('❌ Failed to initialize Hurricane FeatureLayers:', error);
-    throw error;
-  }
+function needsDataRefresh(): boolean {
+  const now = new Date();
+  const refreshInterval = CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000;
+  return !hurricaneDataCache.lastUpdate || 
+         (now.getTime() - hurricaneDataCache.lastUpdate.getTime()) > refreshInterval;
 }
 
 /**
- * Fetch hurricane position data from ArcGIS service (Layer 1)
+ * Fetch hurricane position data from ArcGIS REST service (Layer 1)
  */
 async function fetchHurricanePositions(): Promise<HurricaneFeature[]> {
-  if (!hurricanePositionLayer) {
-    throw new Error('Hurricane position layer not initialized');
-  }
-
   try {
-    const query = new Query({
-      where: '1=1',
-      outFields: ['*'],
-      returnGeometry: true
-    });
-
-    const result = await hurricanePositionLayer.queryFeatures(query);
+    const url = `${CONFIG.weather.hurricanes.serviceUrl}/1/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
+    const response = await fetch(url);
     
-    if (result.features.length === 0) {
+    if (!response.ok) {
+      throw new Error(`Hurricane positions API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.features || data.features.length === 0) {
       return [];
     }
 
-    const mappedFeatures = result.features.map((feature: any) => ({
+    const mappedFeatures = data.features.map((feature: any) => ({
       attributes: feature.attributes,
       geometry: {
-        x: feature.geometry.longitude,
-        y: feature.geometry.latitude
+        x: feature.geometry?.x || feature.geometry?.longitude || 0,
+        y: feature.geometry?.y || feature.geometry?.latitude || 0
       }
     }));
     
     return mappedFeatures;
   } catch (error) {
-    console.error('❌ Error fetching hurricane positions:', error);
     throw error;
   }
 }
@@ -180,21 +141,17 @@ async function fetchHurricaneTrajectories(): Promise<TrajectoryFeature[]> {
   
   for (const layerNum of layersToTry) {
     try {
-      const trajectoryLayer = new FeatureLayer({
-        url: `${CONFIG.weather.hurricanes.serviceUrl}/${layerNum}`,
-        outFields: ['*']
-      });
-
-      const query = new Query({
-        where: '1=1',
-        outFields: ['*'],
-        returnGeometry: true
-      });
-
-      const result = await trajectoryLayer.queryFeatures(query);
+      const url = `${CONFIG.weather.hurricanes.serviceUrl}/${layerNum}/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
+      const response = await fetch(url);
       
-      if (result.features.length > 0) {
-        const mappedFeatures = result.features
+      if (!response.ok) {
+        continue; // Try next layer
+      }
+
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const mappedFeatures = data.features
           .map((feature: any) => {
             if (!feature.geometry || !feature.geometry.rings || feature.geometry.rings.length === 0) {
               return null;
@@ -224,36 +181,32 @@ async function fetchHurricaneTrajectories(): Promise<TrajectoryFeature[]> {
 }
 
 /**
- * Fetch hurricane forecast track data from ArcGIS service (Layer 2)
+ * Fetch hurricane forecast track data from ArcGIS REST service (Layer 2)
  */
 async function fetchHurricaneTracks(): Promise<ForecastTrackFeature[]> {
-  if (!hurricaneTrackLayer) {
-    return [];
-  }
-
   try {
-    const query = new Query({
-      where: '1=1',
-      outFields: ['*'],
-      returnGeometry: true
-    });
-
-    const result = await hurricaneTrackLayer.queryFeatures(query);
+    const url = `${CONFIG.weather.hurricanes.serviceUrl}/2/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
+    const response = await fetch(url);
     
-    if (result.features.length === 0) {
+    if (!response.ok) {
       return [];
     }
 
-    const mappedFeatures = result.features.map((feature: any) => ({
+    const data = await response.json();
+    
+    if (!data.features || data.features.length === 0) {
+      return [];
+    }
+
+    const mappedFeatures = data.features.map((feature: any) => ({
       attributes: feature.attributes,
       geometry: {
-        paths: feature.geometry.paths || []
+        paths: feature.geometry?.paths || []
       }
     }));
     
     return mappedFeatures;
   } catch (error) {
-    console.error('❌ Error fetching hurricane tracks:', error);
     return [];
   }
 }
@@ -368,44 +321,20 @@ function getDotIcon(category: number): string {
 }
 
 /**
- * Hurricane Manager class - follows same pattern as ISS and Earthquake managers
+ * Hurricane Manager class using BaseDataManager
  */
-export class HurricaneManager {
-  private updateInterval: NodeJS.Timeout | null = null;
-  private isInitialized = false;
+import { BaseDataManager } from '../utils/BaseDataManager';
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
-    
-    try {
-      initializeHurricaneLayers();
-      await updateHurricaneData();
-      
-      this.updateInterval = setInterval(() => {
-        updateHurricaneData().catch(error => {
-          console.error('❌ Hurricane update error:', error);
-        });
-      }, CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000);
-      
-      this.isInitialized = true;
-    } catch (error) {
-      console.error('❌ Failed to initialize Hurricane Manager:', error);
-      throw error;
-    }
-  }
-
-  destroy(): void {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
-    this.isInitialized = false;
-  }
-
-  getData(): HurricaneLayerData {
-    return hurricaneDataCache;
+export class HurricaneManager extends BaseDataManager<HurricaneLayerData> {
+  constructor() {
+    super({
+      initializeFunction: async () => {
+        // No specific initialization needed - data fetching handled by updateFunction
+      },
+      updateFunction: updateHurricaneData,
+      updateIntervalMs: CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000,
+      getDataCache: () => hurricaneDataCache
+    });
   }
 }
 
@@ -453,7 +382,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
         const opacity = Math.max(40, 120 - (d.attributes.FCST_HR || 0) * 1.5);
         return [200, 200, 200, opacity]; // Light grey with dynamic opacity
       },
-      getLineColor: (_d: TrajectoryFeature): [number, number, number, number] => {
+      getLineColor: (d: TrajectoryFeature): [number, number, number, number] => {
         return [255, 255, 255, 180]; // White border
       },
       getLineWidth: 3,
@@ -497,7 +426,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
       id: 'hurricane-forecast-tracks',
       data: tracks,
       getPath: (d: ForecastTrackFeature) => d.geometry.paths[0],
-      getColor: (_d: ForecastTrackFeature) => {
+      getColor: (d: ForecastTrackFeature) => {
         return [220, 220, 220, 200]; // Light grey for forecast tracks
       },
       getWidth: 3,
@@ -673,11 +602,4 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
  */
 export function isHurricaneLayerConfigured(): boolean {
   return true; // Always available since we're using Esri's service
-}
-
-/**
- * Get the refresh interval from config
- */
-export function getHurricaneRefreshInterval(): number {
-  return CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000; // Convert minutes to milliseconds
 }
