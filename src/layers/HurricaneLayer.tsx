@@ -453,7 +453,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
         const opacity = Math.max(40, 120 - (d.attributes.FCST_HR || 0) * 1.5);
         return [200, 200, 200, opacity]; // Light grey with dynamic opacity
       },
-      getLineColor: (d: TrajectoryFeature): [number, number, number, number] => {
+      getLineColor: (_d: TrajectoryFeature): [number, number, number, number] => {
         return [255, 255, 255, 180]; // White border
       },
       getLineWidth: 3,
@@ -497,7 +497,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
       id: 'hurricane-forecast-tracks',
       data: tracks,
       getPath: (d: ForecastTrackFeature) => d.geometry.paths[0],
-      getColor: (d: ForecastTrackFeature) => {
+      getColor: (_d: ForecastTrackFeature) => {
         return [220, 220, 220, 200]; // Light grey for forecast tracks
       },
       getWidth: 3,
