@@ -3,15 +3,11 @@
  * Extracts layer creation and management logic from Map component
  */
 
-import { useMemo, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { createTerminatorLayer } from '../layers/TerminatorLayer';
 import { createMountainsLayers } from '../layers/MountainsLayer';
 import { createUnescoLayers } from '../layers/UnescoLayer';
-import { createTimeZonesLayers } from '../layers/TimeZonesLayer';
 import { createCityTimesLayers } from '../layers/CityTimesLayer';
-import { createISSLayers } from '../layers/ISSLayer';
-import { createHurricaneLayers } from '../layers/HurricaneLayer';
-import { createEarthquakeLayers } from '../layers/EarthquakeLayer';
 import type { City } from '../services/simpleCityService';
 
 interface LayerVisibility {
@@ -39,8 +35,7 @@ export const useMapLayers = (
   layerData: LayerData,
   currentTime: Date,
   currentZoom: number,
-  cities: City[],
-  handleISSClick?: (info: any) => void
+  cities: City[]
 ) => {
   const unescoLayersRef = useRef<any[]>([]);
 

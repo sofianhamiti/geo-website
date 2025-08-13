@@ -3,7 +3,7 @@
  * Consolidates all manager initialization and cleanup logic
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { 
   createISSLayers, 
   isISSTrackingConfigured 

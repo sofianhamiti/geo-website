@@ -90,15 +90,6 @@ const hurricaneSvgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="128"
     <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
 </svg>`;
 
-/**
- * Check if hurricane data needs refreshing
- */
-function needsDataRefresh(): boolean {
-  const now = new Date();
-  const refreshInterval = CONFIG.weather.hurricanes.refreshIntervalMinutes * 60 * 1000;
-  return !hurricaneDataCache.lastUpdate || 
-         (now.getTime() - hurricaneDataCache.lastUpdate.getTime()) > refreshInterval;
-}
 
 /**
  * Fetch hurricane position data from ArcGIS REST service (Layer 1)
@@ -382,7 +373,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
         const opacity = Math.max(40, 120 - (d.attributes.FCST_HR || 0) * 1.5);
         return [200, 200, 200, opacity]; // Light grey with dynamic opacity
       },
-      getLineColor: (d: TrajectoryFeature): [number, number, number, number] => {
+      getLineColor: (_d: TrajectoryFeature): [number, number, number, number] => {
         return [255, 255, 255, 180]; // White border
       },
       getLineWidth: 3,
@@ -426,7 +417,7 @@ export function createHurricaneLayers(currentTime: Date): Layer[] {
       id: 'hurricane-forecast-tracks',
       data: tracks,
       getPath: (d: ForecastTrackFeature) => d.geometry.paths[0],
-      getColor: (d: ForecastTrackFeature) => {
+      getColor: (_d: ForecastTrackFeature) => {
         return [220, 220, 220, 200]; // Light grey for forecast tracks
       },
       getWidth: 3,

@@ -137,8 +137,7 @@ const Map: React.FC = () => {
     },
     currentTime,
     currentZoom,
-    cities,
-    handleISSClick
+    cities
   );
 
   // Load saved cities on mount

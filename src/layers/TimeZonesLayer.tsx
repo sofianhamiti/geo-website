@@ -40,7 +40,7 @@ export function createTimeZonesLayers(): Promise<PolygonLayer[]> {
 
       return [timeZonesLayer];
     })
-    .catch(error => {
+    .catch(_error => {
       return [createEmptyTimeZonesLayer()];
     });
 }
@@ -68,8 +68,8 @@ async function fetchTimeZonesData(): Promise<any[]> {
           return processedData;
         }
       }
-    } catch (localFileError) {
-      console.warn('Failed to load local timezone data, falling back to API:', localFileError);
+    } catch (_localFileError) {
+      // Failed to load local file, will fall back to API
     }
 
     // Fallback to ArcGIS API
@@ -274,7 +274,7 @@ export function createTimeZoneTextLayers(currentTime: Date): Promise<TextLayer[]
 
       return [textLayer];
     })
-    .catch(error => {
+    .catch(_error => {
       return [];
     });
 }
@@ -379,7 +379,7 @@ export function getTimezoneTextData(currentTime: Date): Promise<any[]> {
 
       return textData;
     })
-    .catch(error => {
+    .catch(_error => {
       return [];
     });
 }

@@ -79,7 +79,6 @@ async function fetchISSTrajectory(): Promise<ISSTrajectoryPoint[]> {
   const response = await fetch(url);
   
   if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unable to read error response');
     throw new Error(`ISS trajectory API error: ${response.status} ${response.statusText} (${timestamps.length} timestamps requested)`);
   }
   
