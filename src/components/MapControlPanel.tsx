@@ -8,7 +8,7 @@ import { CityManager } from './CityManager';
 
 interface MapControlPanelProps {
   isMenuOpen: boolean;
-  selectedBasemap: 'usgs' | 'arcgis';
+  selectedBasemap: 'usgs' | 'arcgis' | 'eox';
   showArcgisPlaces: boolean;
   showTimezones: boolean;
   showMountains: boolean;
@@ -18,14 +18,17 @@ interface MapControlPanelProps {
   showISS: boolean;
   showEarthquakes: boolean;
   showHurricanes: boolean;
+  showPlanes: boolean;
   isISSLoading: boolean;
   isEarthquakesLoading: boolean;
   isHurricanesLoading: boolean;
+  isPlanesLoading: boolean;
   earthquakeLastUpdate: Date | null;
   hurricaneLastUpdate: Date | null;
+  planeLastUpdate: Date | null;
   currentTime: Date;
   onToggleMenu: () => void;
-  onSetSelectedBasemap: (basemap: 'usgs' | 'arcgis') => void;
+  onSetSelectedBasemap: (basemap: 'usgs' | 'arcgis' | 'eox') => void;
   onToggleArcgisPlaces: () => void;
   onToggleTimezones: () => void;
   onToggleMountains: () => void;
@@ -35,6 +38,7 @@ interface MapControlPanelProps {
   onToggleISS: () => void;
   onToggleEarthquakes: () => void;
   onToggleHurricanes: () => void;
+  onTogglePlanes: () => void;
 }
 
 const ToggleSwitch: React.FC<{ enabled: boolean; onClick: () => void; disabled?: boolean }> = ({ 
@@ -95,11 +99,14 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   showISS,
   showEarthquakes,
   showHurricanes,
+  showPlanes,
   isISSLoading,
   isEarthquakesLoading,
   isHurricanesLoading,
+  isPlanesLoading,
   earthquakeLastUpdate,
   hurricaneLastUpdate,
+  planeLastUpdate,
   currentTime,
   onToggleMenu,
   onSetSelectedBasemap,
@@ -112,6 +119,7 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   onToggleISS,
   onToggleEarthquakes,
   onToggleHurricanes,
+  onTogglePlanes,
 }) => {
   return (
     <>
@@ -156,6 +164,35 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
               <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Basemap</h3>
               <div className="space-y-3">
                 
+                {/* EOX Sentinel-2 Cloudless - Now First (Default) */}
+                <div 
+                  onClick={() => onSetSelectedBasemap('eox')}
+                  className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                    selectedBasemap === 'eox' 
+                      ? 'bg-blue-600/30 border border-blue-400/50' 
+                      : 'bg-slate-800/50 hover:bg-slate-800/70'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-5 h-5 flex items-center justify-center">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-blue-100 font-medium">Sentinel-2 Cloudless</div>
+                      <div className="text-blue-300 text-xs">EOX 10m Resolution</div>
+                    </div>
+                  </div>
+                  {selectedBasemap === 'eox' && (
+                    <div className="w-5 h-5 flex items-center justify-center">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+
                 {/* USGS Blue Marble */}
                 <div 
                   onClick={() => onSetSelectedBasemap('usgs')}
@@ -323,6 +360,20 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
                   enabled={showHurricanes}
                   loading={isHurricanesLoading}
                   onToggle={onToggleHurricanes}
+                />
+
+                <LayerControl
+                  title="Aircraft Tracking"
+                  subtitle={isPlanesLoading ? 'Loading...' : planeLastUpdate ? `Updated ${planeLastUpdate.toLocaleTimeString()}` : 'Real-time flight data'}
+                  icon={<svg width="16" height="16" viewBox="0 0 128 128" fill="currentColor" className="text-sky-400">
+                    <path d="M64 20 L68 45 L64 55 L60 45 Z"/>
+                    <path d="M30 50 L98 50 L94 60 L34 60 Z"/>
+                    <path d="M58 75 L70 75 L66 90 L62 90 Z"/>
+                    <path d="M45 82 L83 82 L81 88 L47 88 Z"/>
+                  </svg>}
+                  enabled={showPlanes}
+                  loading={isPlanesLoading}
+                  onToggle={onTogglePlanes}
                 />
               </div>
             </div>

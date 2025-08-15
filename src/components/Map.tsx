@@ -30,6 +30,7 @@ const Map: React.FC = () => {
     showISS,
     showHurricanes,
     showEarthquakes,
+    showPlanes,
     issLayers,
     issManager,
     isISSLoading,
@@ -41,6 +42,10 @@ const Map: React.FC = () => {
     earthquakeManager,
     earthquakeLastUpdate,
     isEarthquakesLoading,
+    planeLayers,
+    planeManager,
+    planeLastUpdate,
+    isPlanesLoading,
     timezoneLayers,
     isMenuOpen,
     currentTime,
@@ -57,6 +62,7 @@ const Map: React.FC = () => {
     toggleISS,
     toggleHurricanes,
     toggleEarthquakes,
+    togglePlanes,
     toggleMenu,
     updateTime,
     setISSLayers,
@@ -64,6 +70,8 @@ const Map: React.FC = () => {
     setHurricaneLastUpdate,
     setEarthquakeLayers,
     setEarthquakeLastUpdate,
+    setPlaneLayers,
+    setPlaneLastUpdate,
     setTimezoneLayers,
     initializeISSManager,
     destroyISSManager,
@@ -71,6 +79,8 @@ const Map: React.FC = () => {
     destroyHurricaneManager,
     initializeEarthquakeManager,
     destroyEarthquakeManager,
+    initializePlaneManager,
+    destroyPlaneManager,
     loadSavedCities,
     setISSVideoVisible,
   } = useMapStore();
@@ -91,10 +101,12 @@ const Map: React.FC = () => {
       showISS,
       showHurricanes,
       showEarthquakes,
+      showPlanes,
       showTimezones,
       issManager,
       hurricaneManager,
       earthquakeManager,
+      planeManager,
     },
     {
       initializeISSManager,
@@ -103,12 +115,16 @@ const Map: React.FC = () => {
       destroyHurricaneManager,
       initializeEarthquakeManager,
       destroyEarthquakeManager,
+      initializePlaneManager,
+      destroyPlaneManager,
       setISSLayers,
       setHurricaneLayers,
       setEarthquakeLayers,
+      setPlaneLayers,
       setTimezoneLayers,
       setHurricaneLastUpdate,
       setEarthquakeLastUpdate,
+      setPlaneLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -126,14 +142,17 @@ const Map: React.FC = () => {
       showISS,
       showHurricanes,
       showEarthquakes,
+      showPlanes,
     },
     {
       issLayers,
       hurricaneLayers,
       earthquakeLayers,
+      planeLayers,
       timezoneLayers,
       hurricaneLastUpdate,
       earthquakeLastUpdate,
+      planeLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -239,11 +258,14 @@ const Map: React.FC = () => {
         showISS={showISS}
         showEarthquakes={showEarthquakes}
         showHurricanes={showHurricanes}
+        showPlanes={showPlanes}
         isISSLoading={isISSLoading}
         isEarthquakesLoading={isEarthquakesLoading}
         isHurricanesLoading={isHurricanesLoading}
+        isPlanesLoading={isPlanesLoading}
         earthquakeLastUpdate={earthquakeLastUpdate}
         hurricaneLastUpdate={hurricaneLastUpdate}
+        planeLastUpdate={planeLastUpdate}
         currentTime={currentTime}
         onToggleMenu={toggleMenu}
         onSetSelectedBasemap={setSelectedBasemap}
@@ -256,6 +278,7 @@ const Map: React.FC = () => {
         onToggleISS={toggleISS}
         onToggleEarthquakes={toggleEarthquakes}
         onToggleHurricanes={toggleHurricanes}
+        onTogglePlanes={togglePlanes}
       />
 
       {/* Date/Time Display */}

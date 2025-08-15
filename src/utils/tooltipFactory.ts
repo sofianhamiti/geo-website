@@ -288,6 +288,57 @@ export function createEarthquakeTooltip(earthquake: any) {
 
 
 /**
+ * Aircraft position tooltip generator
+ */
+export function createPlaneTooltip(aircraft: any) {
+  // Callsign (if available)
+  let callsignDisplay = '';
+  if (aircraft.callsign && aircraft.callsign.trim()) {
+    callsignDisplay = `<strong>Flight:</strong> ${aircraft.callsign.trim()}`;
+  } else {
+    callsignDisplay = `<strong>Aircraft:</strong> ${aircraft.icao24.toUpperCase()}`;
+  }
+  
+  // Altitude
+  let altitudeDisplay = '';
+  if (aircraft.baro_altitude !== null) {
+    const altFeet = Math.round(aircraft.baro_altitude * 3.28084); // Convert meters to feet
+    altitudeDisplay = `<strong>Altitude:</strong> ${altFeet.toLocaleString()} ft`;
+  }
+  
+  // Speed
+  let speedDisplay = '';
+  if (aircraft.velocity !== null) {
+    const speedKnots = Math.round(aircraft.velocity * 1.94384); // Convert m/s to knots
+    const speedMph = Math.round(aircraft.velocity * 2.23694); // Convert m/s to mph
+    speedDisplay = `<strong>Speed:</strong> ${speedKnots} kts (${speedMph} mph)`;
+  }
+  
+  // Heading
+  let headingDisplay = '';
+  if (aircraft.true_track !== null) {
+    const heading = Math.round(aircraft.true_track);
+    const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(heading / 45) % 8];
+    headingDisplay = `<strong>Heading:</strong> ${compass} ${heading}°`;
+  }
+  
+  // Origin country and status
+  const countryDisplay = `<strong>Country:</strong> ${aircraft.origin_country}`;
+  const statusDisplay = `<strong>Status:</strong> ${aircraft.on_ground ? 'On Ground' : 'Flying'}`;
+
+  const content = [
+    callsignDisplay,
+    altitudeDisplay,
+    speedDisplay,
+    headingDisplay,
+    countryDisplay,
+    statusDisplay
+  ].filter(line => line).join('<br>');
+
+  return createTooltipContainer(content, `rgba(100, 149, 237, 0.3)`, 'large', '280px');
+}
+
+/**
  * Main tooltip factory function - dispatches to appropriate tooltip generator
  */
 export function createLayerTooltip(object: any, layer: any) {
@@ -316,6 +367,9 @@ export function createLayerTooltip(object: any, layer: any) {
     
     case 'earthquake-positions':
       return createEarthquakeTooltip(object);
+    
+    case 'plane-positions':
+      return createPlaneTooltip(object);
     
     default:
       return null;

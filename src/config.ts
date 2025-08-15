@@ -19,11 +19,13 @@ export const CONFIG = {
     satelliteTiles: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
     arcgisSatellite: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     arcgisPlaces: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    eoxSentinel: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg',
     tileSize: 256,
     maxZoom: 8,
     attribution: '© USGS National Map',
     arcgisSatelliteAttribution: '© Esri, Maxar, Earthstar Geographics',
     arcgisAttribution: '© Esri',
+    eoxAttribution: 'Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024)',
   },
 
   // Styling
@@ -72,9 +74,9 @@ export const CONFIG = {
       },
     },
     mountains: {
-      // Clean cartographic mountain styling - Aurora Geographical theme
+      // Clean cartographic mountain styling - Enhanced bright gold theme
       minZoom: 2, // Show mountains at zoom level 2 and above
-      symbolColor: [230, 184, 0, 255] as [number, number, number, number], // Golden amber - elegant and visible
+      symbolColor: [255, 215, 0, 255] as [number, number, number, number], // Bright gold for maximum pop
       labelColor: [255, 140, 66, 255] as [number, number, number, number], // Warm orange for labels
       symbolSize: 6, // Increased base symbol size for better visibility
       labelSize: 12, // Slightly larger text size for better readability
@@ -88,7 +90,7 @@ export const CONFIG = {
       // API Configuration
       satelliteId: 25544, // ISS NORAD ID
       apiBaseUrl: 'https://api.wheretheiss.at/v1/satellites/',
-      trajectoryDurationMinutes: 60, // 60 minutes ahead
+      trajectoryDurationMinutes: 90, // 120 minutes ahead
       trajectoryPointIntervalSeconds: 120, // 2 minutes between trajectory points
       updateIntervalMs: 10000, // 30 seconds between updates
 
@@ -244,6 +246,60 @@ export const CONFIG = {
       maxEarthquakes: 1000, // Limit for performance
       significantThreshold: 4.5, // M4.5+ considered significant
     },
+    planes: {
+      // API Configuration
+      apiBaseUrl: 'https://opensky-network.org/api',
+      endpoint: '/states/all',
+      updateIntervalMs: 10 * 60 * 1000, // 10 minutes - optimized for API limits (144 calls/day)
+
+      // OAuth2 Configuration
+      oauth2: {
+        tokenEndpoint: 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token',
+        tokenCacheExpirationMs: 25 * 60 * 1000, // 25 minutes (refresh before 30min expiry)
+        grantType: 'client_credentials',
+      },
+
+      // API Credit Management - Based on geographic area, not just API calls
+      apiLimits: {
+        creditsPerDay: 4000,        // 4000 credits/day with OAuth2 (8000 if contributing data)
+        creditsPerCall: 4,          // 4 credits for global bounds (>400 sq deg area)
+        maxCallsPerDay: 1000,       // 1000 calls max at 4 credits each
+        actualUsage: 144,           // 144 calls/day at 10min intervals  
+        dailyCreditsUsed: 576,      // 144 calls × 4 credits = 576 credits (14.4% of limit)
+        recommendedInterval: 10,    // 10 minutes = 144 calls/day = 576 credits
+        conservativeInterval: 15,   // 15 minutes = 96 calls/day = 384 credits  
+      },
+
+      // Icon Configuration
+      icon: {
+        svgData: `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24"><path fill="#FFD700" d="M14 8.947L22 14v2l-8-2.526v5.36l3 1.666V22l-4.5-1L8 22v-1.5l3-1.667v-5.36L3 16v-2l8-5.053V3.5a1.5 1.5 0 0 1 3 0z"/></svg>`,
+        width: 96,
+        height: 96,
+        anchorX: 48,
+        anchorY: 48,
+      },
+
+      // Visual styling
+      iconSize: 16, // Base aircraft icon size
+      iconSizeMultiplier: 1.2, // Size scaling factor
+
+
+
+      // Geographic bounds optimization
+      boundsPadding: 2, // Degrees to extend bounds for API calls
+
+      // Error display styling
+      errorTextSize: 16,
+      errorTextColor: [100, 149, 237, 255] as [number, number, number, number], // Light blue
+      errorBackgroundColor: [15, 23, 42, 204] as [number, number, number, number],
+      errorBackgroundPadding: [8, 4, 8, 4] as [number, number, number, number],
+
+      // Tooltip styling
+      tooltipSize: 12,
+      tooltipColor: [255, 255, 255, 255] as [number, number, number, number],
+      tooltipBackgroundColor: [15, 23, 42, 220] as [number, number, number, number],
+      tooltipBorderColor: [100, 149, 237, 80] as [number, number, number, number],
+    },
     timezones: {
       // Local data configuration (primary)
       dataPath: '/geo-website/data/world-timezones.geojson',
@@ -304,43 +360,65 @@ export const CONFIG = {
       // API Configuration
       serviceUrl: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Active_Hurricanes_v1/FeatureServer',
       refreshIntervalMinutes: 60, // 1 hour
+      
+      // API Layer Configuration
+      apiLayers: {
+        positions: 1,      // Hurricane position data (current, historical, forecast)
+        tracks: 2,         // Forecast track centerlines
+        trajectories: [0, 3, 4, 5], // Trajectory uncertainty cones (try multiple layers)
+      },
 
-      // Icon Configuration
-      icon: {
+      // Zoom.Earth Style Color Palette - professional subtle visualization matching their ACTUAL fucking implementation
+      zoomEarthColors: {
+        uncertaintyCone: [255, 255, 255, 20] as [number, number, number, number],       // VERY subtle white - almost invisible like zoom.earth
+      },
+
+      // Visual Parameters - refined to match zoom.earth's clean professional style
+      visualParams: {
+        // Track line widths - thinner and more refined
+        historicalTrackWidth: 2.5,         // Clean, professional width
+        forecastTrackWidth: 3,              // Slightly thicker for emphasis
+        coneStrokeWidth: 1,                 // Barely visible stroke
+        
+        // Icon sizing parameters - cleaner, more professional
+        baseIconSize: 20,                   // Smaller base size
+        currentPositionMultiplier: 1.8,     // Less dramatic scaling
+        historicalDotRadius: 5,             // Smaller, cleaner dots
+        forecastDotRadius: 4,               // Subtle forecast markers
+        
+        // Professional subtle stroke colors matching Zoom.Earth's actual implementation
+        coneStrokeColor: [255, 255, 255, 25] as [number, number, number, number],  // Nearly invisible stroke
+        historicalDotStroke: [255, 255, 255, 150] as [number, number, number, number],
+        forecastDotStroke: [255, 255, 255, 80] as [number, number, number, number],
+      },
+
+      // Hurricane SVG Icon Template - optimized for ocean visibility
+      iconTemplate: {
+        svgContent: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+    <!-- Center circle -->
+    <circle cx="64" cy="64" r="22" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Upper sweep line -->
+    <path d="M50 29.2l-1 1.9A67.4 67.4 0 0 0 42.2 66.8" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Lower sweep line -->
+    <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+</svg>` as const,
         width: 128,
         height: 128,
         anchorX: 64,
         anchorY: 64,
       },
 
-      // Saffir-Simpson category colors - optimized for ocean visibility
+      // Saffir-Simpson category colors - matched to Zoom.Earth's exact color scheme
       categoryColors: {
         5: [139, 0, 139, 255] as [number, number, number, number], // Purple - Cat 5 (157+ mph)
-        4: [255, 0, 0, 255] as [number, number, number, number],   // Red - Cat 4 (130-156 mph)
-        3: [255, 69, 0, 255] as [number, number, number, number],  // Orange-Red - Cat 3 (111-129 mph)
-        2: [255, 140, 0, 255] as [number, number, number, number], // Orange - Cat 2 (96-110 mph)
-        1: [255, 215, 0, 255] as [number, number, number, number], // Gold - Cat 1 (74-95 mph)
-        0: [0, 255, 255, 255] as [number, number, number, number]  // Bright Cyan - Tropical Storm (39-73 mph) - high visibility against ocean
-      },
-
-      // Balanced exponential category-based sizing
-      categorySizes: {
-        5: 30, // Cat 5 - balanced base size for reasonable final size (~180-200px)
-        4: 26, // Cat 4 - major hurricane (~130-150px)
-        3: 23, // Cat 3 - major hurricane (~90-105px)
-        2: 21, // Cat 2 - hurricane (~60-75px)
-        1: 19, // Cat 1 - hurricane (~40-50px)
-        0: 20  // Tropical Storm - increased to ensure ~25-30px final size
-      },
-
-      // Rebalanced exponential scaling parameters
-      categoryScaling: {
-        baseMultiplier: 2,    // Base multiplier (the "1" in "1 + category")
-        categoryWeight: 1.5, // Fine-tuned to 1.35 for optimal exponential growth
-      },
-
-      // Size calculation parameters
-      sizeMultiplier: 0.85, // Fine-tuned to 0.85 for balanced overall scaling
+        4: [139, 0, 0, 255] as [number, number, number, number],   // Dark Red - Cat 4 (130-156 mph)
+        3: [255, 0, 0, 255] as [number, number, number, number],   // Pure Red - Cat 3 (111-129 mph)
+        2: [255, 165, 0, 255] as [number, number, number, number], // Orange - Cat 2 (96-110 mph)
+        1: [255, 255, 0, 255] as [number, number, number, number], // Bright Yellow - Cat 1 (74-95 mph)
+        0: [0, 255, 0, 255] as [number, number, number, number]    // Green - Tropical Storm (39-73 mph) - matches Zoom.Earth
+      }
     },
   },
 
@@ -354,6 +432,7 @@ export const CONFIG = {
   layerIds: {
     satellite: 'satellite-layer',
     arcgisSatellite: 'arcgis-satellite-layer',
+    eoxSentinel: 'eox-sentinel-layer',
     arcgisPlaces: 'arcgis-places-layer',
     terminator: 'deck-gl-terminator',
     cities: 'deck-gl-cities',
@@ -366,11 +445,14 @@ export const CONFIG = {
     earthquakePositions: 'earthquake-positions',
     earthquakeLabels: 'earthquake-labels',
     timezones: 'deck-gl-timezones',
+    planes: 'deck-gl-planes',
+    planePositions: 'plane-positions',
   },
 
   sourceIds: {
     satellite: 'satellite',
     arcgisSatellite: 'arcgis-satellite',
+    eoxSentinel: 'eox-sentinel',
     arcgisPlaces: 'arcgis-places',
   },
 } as const;

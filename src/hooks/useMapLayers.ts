@@ -19,15 +19,18 @@ interface LayerVisibility {
   showISS: boolean;
   showHurricanes: boolean;
   showEarthquakes: boolean;
+  showPlanes: boolean;
 }
 
 interface LayerData {
   issLayers: any[];
   hurricaneLayers: any[];
   earthquakeLayers: any[];
+  planeLayers: any[];
   timezoneLayers: any[];
   hurricaneLastUpdate: Date | null;
   earthquakeLastUpdate: Date | null;
+  planeLastUpdate: Date | null;
 }
 
 export const useMapLayers = (
@@ -35,7 +38,7 @@ export const useMapLayers = (
   layerData: LayerData,
   currentTime: Date,
   currentZoom: number,
-  cities: City[]
+  cities: City[],
 ) => {
   const unescoLayersRef = useRef<any[]>([]);
 
@@ -153,12 +156,28 @@ export const useMapLayers = (
         }));
       });
     }
+
+    // Planes tracking layers
+    if (visibility.showPlanes && layerData.planeLayers.length > 0) {
+      layerData.planeLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: visibility.showPlanes,
+          updateTriggers: {
+            getPosition: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
+            getSize: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
+            getColor: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
+            getAngle: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
+          }
+        }));
+      });
+    }
     
     return layers;
   }, [
     visibility.showISS, layerData.issLayers, currentTime,
     visibility.showHurricanes, layerData.hurricaneLayers, layerData.hurricaneLastUpdate,
-    visibility.showEarthquakes, layerData.earthquakeLayers, layerData.earthquakeLastUpdate
+    visibility.showEarthquakes, layerData.earthquakeLayers, layerData.earthquakeLastUpdate,
+    visibility.showPlanes, layerData.planeLayers, layerData.planeLastUpdate
   ]);
 
   // Combine all layers

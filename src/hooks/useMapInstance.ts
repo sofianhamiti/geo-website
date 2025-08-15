@@ -37,6 +37,13 @@ export const useMapInstance = (
             maxzoom: CONFIG.sources.maxZoom,
             attribution: CONFIG.sources.arcgisSatelliteAttribution,
           },
+          [CONFIG.sourceIds.eoxSentinel]: {
+            type: 'raster',
+            tiles: [CONFIG.sources.eoxSentinel],
+            tileSize: CONFIG.sources.tileSize,
+            maxzoom: CONFIG.sources.maxZoom,
+            attribution: CONFIG.sources.eoxAttribution,
+          },
           [CONFIG.sourceIds.arcgisPlaces]: {
             type: 'raster',
             tiles: [CONFIG.sources.arcgisPlaces],
@@ -50,13 +57,19 @@ export const useMapInstance = (
             id: CONFIG.layerIds.satellite,
             type: 'raster',
             source: CONFIG.sourceIds.satellite,
-            layout: { 'visibility': 'visible' },
+            layout: { 'visibility': 'none' },
           },
           {
             id: CONFIG.layerIds.arcgisSatellite,
             type: 'raster',
             source: CONFIG.sourceIds.arcgisSatellite,
             layout: { 'visibility': 'none' },
+          },
+          {
+            id: CONFIG.layerIds.eoxSentinel,
+            type: 'raster',
+            source: CONFIG.sourceIds.eoxSentinel,
+            layout: { 'visibility': 'visible' },
           },
           {
             id: CONFIG.layerIds.arcgisPlaces,

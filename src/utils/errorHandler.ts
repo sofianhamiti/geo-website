@@ -78,14 +78,29 @@ export function createAppError(
 /**
  * Log error with consistent formatting
  */
-export function logError(_error: AppError): void {
+export function logError(error: AppError): void {
   const isDev = import.meta.env.DEV;
   const shouldLog = isDev || ERROR_CONFIG.logInProduction;
   
   if (!shouldLog) return;
 
-  // Console logging removed for production build optimization
-  // Error logging is intentionally minimal for performance
+  // Log error for debugging
+  console.error(`[${error.severity}] ${error.type}${error.context ? ` (${error.context})` : ''}: ${error.message}`);
+  
+  // Use appropriate console method based on severity
+  switch (error.severity) {
+    case ErrorSeverity.CRITICAL:
+    case ErrorSeverity.HIGH:
+    case ErrorSeverity.MEDIUM:
+    case ErrorSeverity.LOW:
+      // Console logging removed for production build optimization
+      break;
+  }
+  
+  // Log stack trace for development
+  if (isDev && error.stack) {
+    // Stack trace logging removed for production build optimization
+  }
 }
 
 /**
