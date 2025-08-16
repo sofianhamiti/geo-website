@@ -9,7 +9,6 @@ import { safeAsyncOperation } from '../utils/errorHandler';
 import type {
   HurricaneFeature,
   TrajectoryFeature,
-  ForecastTrackFeature,
   HurricaneApiResponse,
   HurricaneLayerData
 } from '../types/hurricane';
@@ -126,56 +125,23 @@ export class HurricaneAPI {
     );
   }
 
-  /**
-   * Fetch hurricane forecast track centerlines
-   * @returns Promise resolving to array of forecast track features
-   */
-  async fetchTracks(): Promise<ForecastTrackFeature[]> {
-    return safeAsyncOperation(
-      async () => {
-        const url = `${this.serviceUrl}/${this.apiLayers.tracks}/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          // Return empty array instead of throwing for tracks (non-critical)
-          return [];
-        }
-
-        const data: HurricaneApiResponse = await response.json();
-        
-        if (data.error || !data.features || data.features.length === 0) {
-          return [];
-        }
-
-        // Map raw API response to typed forecast track features
-        const mappedFeatures = data.features.map((feature: any): ForecastTrackFeature => ({
-          attributes: feature.attributes,
-          geometry: {
-            paths: feature.geometry?.paths || []
-          }
-        }));
-        
-        return mappedFeatures;
-      },
-      'fetch hurricane tracks',
-      []
-    );
-  }
+  // Removed fetchTracks() method - unused since we now use SSNUM trajectory coloring from Layer 0
 
   /**
-   * Fetch all hurricane data concurrently
-   * Consolidates all three data fetches with Promise.all for optimal performance
+   * Fetch optimized hurricane data - removed unused Layer 2 (tracks)
+   * Now only fetches what we actually use: positions, trajectories, and SSNUM data
    * @returns Promise resolving to complete hurricane layer data
    */
   async fetchAllData(): Promise<HurricaneLayerData> {
     return safeAsyncOperation(
       async () => {
-        // Fetch all data types concurrently for better performance
-        const [positions, trajectories, tracks] = await Promise.all([
+        // Optimized: Only fetch what we actually use (removed unused Layer 2 tracks)
+        const [positions, trajectories] = await Promise.all([
           this.fetchPositions(),
-          this.fetchTrajectories(),
-          this.fetchTracks()
+          this.fetchTrajectories()
+          // Removed fetchTracks() - Layer 2 is unused since we use SSNUM trajectories
         ]);
+        const tracks: any[] = []; // Empty since we don't use Layer 2 anymore
 
         // Return structured data ready for layer consumption
         return {
@@ -196,6 +162,40 @@ export class HurricaneAPI {
         lastUpdate: null,
         error: 'Failed to fetch hurricane data'
       }
+    );
+  }
+
+  /**
+   * Fetch Layer 0 data for SSNUM-based trajectory coloring including current positions
+   * Layer 0 contains current and forecast positions with SSNUM categories
+   * @returns Promise resolving to array of Layer 0 features with SSNUM data
+   */
+  async fetchForecastPositionsWithSSNUM(): Promise<any[]> {
+    return safeAsyncOperation(
+      async () => {
+        const url = `${this.serviceUrl}/0/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          return []; // Return empty array on error, don't break existing functionality
+        }
+
+        const data: HurricaneApiResponse = await response.json();
+        
+        if (data.error || !data.features) {
+          return [];
+        }
+
+        // Include current (TAU=0) AND forecast (TAU>0) positions to eliminate gaps
+        return data.features.filter((feature: any) => {
+          const attrs = feature.attributes;
+          return attrs.TAU !== null && attrs.TAU !== undefined &&
+                 attrs.SSNUM !== null && attrs.SSNUM !== undefined &&
+                 attrs.LAT && attrs.LON;
+        });
+      },
+      'fetch current and forecast positions with SSNUM',
+      []
     );
   }
 

@@ -22,11 +22,12 @@ import type { HurricaneLayerData } from '../types/hurricane';
 /**
  * Hurricane data cache - centralized data storage
  */
-let hurricaneDataCache: HurricaneLayerData = {
+let hurricaneDataCache: HurricaneLayerData & { ssnumForecastPositions?: any[] } = {
   positions: [],
   trajectories: [],
   tracks: [],
   processedStorms: [],
+  ssnumForecastPositions: [], // Add SSNUM data field
   lastUpdate: null,
   error: null,
 };
@@ -72,8 +73,11 @@ export class HurricaneDataManager extends BaseDataManager<HurricaneLayerData> {
    */
   private async updateHurricaneData(): Promise<void> {
     try {
-      // Step 1: Fetch raw data from API
-      const rawData = await this.hurricaneAPI.fetchAllData();
+      // Step 1: Fetch raw data from API + Layer 0 data with SSNUM
+      const [rawData, ssnumData] = await Promise.all([
+        this.hurricaneAPI.fetchAllData(),
+        this.hurricaneAPI.fetchForecastPositionsWithSSNUM()
+      ]);
       
       // DEBUG: Check if we have any forecast positions at all
       const forecastPositions = rawData.positions.filter((p: any) => p.attributes?.FCST_HR > 0);
@@ -82,29 +86,33 @@ export class HurricaneDataManager extends BaseDataManager<HurricaneLayerData> {
         forecastPositions: forecastPositions.length,
         tracks: rawData.tracks.length,
         trajectories: rawData.trajectories.length,
+        ssnumPositions: ssnumData.length,
         sampleForecastPosition: forecastPositions[0],
-        sampleTrack: rawData.tracks[0]
+        sampleSSNUMPosition: ssnumData[0]
       });
       
-      if (forecastPositions.length > 0) {
-        console.log('🌀 Forecast position fields:', Object.keys(forecastPositions[0].attributes));
-        console.log('🌀 Forecast SS values:', forecastPositions.slice(0, 5).map((p: any) => ({
-          FCST_HR: p.attributes.FCST_HR,
-          SS: p.attributes.SS,
-          INTENSITY: p.attributes.INTENSITY,
-          STORMNAME: p.attributes.STORMNAME
+      if (ssnumData.length > 0) {
+        console.log('🌀 SSNUM position fields:', Object.keys(ssnumData[0].attributes));
+        console.log('🌀 SSNUM values:', ssnumData.slice(0, 5).map((p: any) => ({
+          TAU: p.attributes.TAU,
+          SSNUM: p.attributes.SSNUM,
+          MAXWIND: p.attributes.MAXWIND,
+          STORMNAME: p.attributes.STORMNAME,
+          LAT: p.attributes.LAT,
+          LON: p.attributes.LON
         })));
       }
       
       // Step 2: Process positions into storms using HurricaneProcessor
       const processedStorms = this.hurricaneProcessor.processRawData(rawData.positions);
       
-      // Step 3: Update cache with processed data
+      // Step 3: Update cache with processed data including SSNUM data
       hurricaneDataCache = {
         positions: rawData.positions,
         trajectories: rawData.trajectories,
         tracks: rawData.tracks,
         processedStorms,
+        ssnumForecastPositions: ssnumData, // Add SSNUM data for trajectory coloring
         lastUpdate: new Date(),
         error: null, // Clear any previous errors
       };

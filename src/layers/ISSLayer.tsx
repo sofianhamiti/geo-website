@@ -196,34 +196,7 @@ export function createISSLayers(currentTime: Date, onISSClick?: (info: any) => v
     return layers;
   }
 
-  // Current ISS position icon
-  if (currentPosition) {
-    layers.push(new IconLayer({
-      id: 'iss-position',
-      data: [currentPosition],
-      getPosition: (d: ISSPosition) => [d.longitude, d.latitude],
-      getIcon: () => ({
-        url: SPACE_STATION_ICON,
-        width: CONFIG.styles.iss.icon.width,
-        height: CONFIG.styles.iss.icon.height,
-        anchorY: CONFIG.styles.iss.icon.anchorY,
-        anchorX: CONFIG.styles.iss.icon.anchorX,
-      }),
-      getSize: () => CONFIG.styles.iss.iconSize,
-      sizeScale: 1,
-      sizeUnits: 'pixels',
-      pickable: true,
-      autoHighlight: false, // Disable hover shadow effects
-      alphaCutoff: -1, // Include ALL pixels (including transparent) for picking
-      onClick: onISSClick, // Handle clicks for video overlay
-      updateTriggers: {
-        getPosition: currentTime.getTime(),
-      },
-    }));
-
-  }
-
-  // ISS trajectory path with dateline crossing handling
+  // ISS trajectory path with dateline crossing handling (render first - below icon)
   if (trajectory.length > 1) {
     const trajectorySegments = processTrajectoryForDateline(trajectory);
     
@@ -247,6 +220,32 @@ export function createISSLayers(currentTime: Date, onISSClick?: (info: any) => v
         },
       }));
     });
+  }
+
+  // Current ISS position icon (render second - above trajectory)
+  if (currentPosition) {
+    layers.push(new IconLayer({
+      id: 'iss-position',
+      data: [currentPosition],
+      getPosition: (d: ISSPosition) => [d.longitude, d.latitude],
+      getIcon: () => ({
+        url: SPACE_STATION_ICON,
+        width: CONFIG.styles.iss.icon.width,
+        height: CONFIG.styles.iss.icon.height,
+        anchorY: CONFIG.styles.iss.icon.anchorY,
+        anchorX: CONFIG.styles.iss.icon.anchorX,
+      }),
+      getSize: () => CONFIG.styles.iss.iconSize,
+      sizeScale: 1,
+      sizeUnits: 'pixels',
+      pickable: true,
+      autoHighlight: false, // Disable hover shadow effects
+      alphaCutoff: -1, // Include ALL pixels (including transparent) for picking
+      onClick: onISSClick, // Handle clicks for video overlay
+      updateTriggers: {
+        getPosition: currentTime.getTime(),
+      },
+    }));
   }
 
   return layers;

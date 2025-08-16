@@ -3,7 +3,7 @@
  * Extracts layer creation and management logic from Map component
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { createTerminatorLayer } from '../layers/TerminatorLayer';
 import { createMountainsLayers } from '../layers/MountainsLayer';
 import { createUnescoLayers } from '../layers/UnescoLayer';
@@ -40,25 +40,9 @@ export const useMapLayers = (
   currentZoom: number,
   cities: City[],
 ) => {
-  const unescoLayersRef = useRef<any[]>([]);
-
-  // Load UNESCO layers once
-  useEffect(() => {
-    createUnescoLayers().then(layers => {
-      unescoLayersRef.current = layers;
-    });
-  }, []);
-
   // Static layers (visibility-dependent only)
   const staticLayers = useMemo(() => {
     const layers: any[] = [];
-    
-    // UNESCO layers
-    if (unescoLayersRef.current) {
-      unescoLayersRef.current.forEach(layer => {
-        layers.push(layer.clone({ visible: visibility.showUnesco }));
-      });
-    }
     
     // Timezone layers
     if (layerData.timezoneLayers.length > 0) {
@@ -68,7 +52,7 @@ export const useMapLayers = (
     }
     
     return layers;
-  }, [visibility.showUnesco, visibility.showTimezones, layerData.timezoneLayers]);
+  }, [visibility.showTimezones, layerData.timezoneLayers]);
 
   // Zoom-dependent layers
   const zoomDependentLayers = useMemo(() => {
@@ -81,6 +65,33 @@ export const useMapLayers = (
     
     return layers;
   }, [currentZoom, visibility.showMountains]);
+
+  // UNESCO layers state (zoom-dependent for icon switching)
+  const [unescoLayersState, setUnescoLayersState] = useState<any[]>([]);
+
+  // Load/update UNESCO layers when zoom changes
+  useEffect(() => {
+    let mounted = true;
+    
+    createUnescoLayers(currentZoom).then(layers => {
+      if (mounted) {
+        setUnescoLayersState(layers);
+      }
+    });
+    
+    return () => {
+      mounted = false;
+      // Clear previous layers to prevent memory leaks
+      setUnescoLayersState([]);
+    };
+  }, [currentZoom]);
+
+  // UNESCO layers with visibility
+  const unescoLayers = useMemo(() => {
+    return unescoLayersState.map(layer => 
+      layer.clone({ visible: visibility.showUnesco })
+    );
+  }, [unescoLayersState, visibility.showUnesco]);
 
   // Time-dependent layers
   const timeDependentLayers = useMemo(() => {
@@ -110,23 +121,30 @@ export const useMapLayers = (
     return layers;
   }, [currentTime, visibility.showTerminator, visibility.showCities, cities]);
 
-  // Data-dependent layers
-  const dataDependentLayers = useMemo(() => {
+  // Earthquake layers (bottom-most data layer)
+  const earthquakeLayers = useMemo(() => {
     const layers: any[] = [];
-
-    // ISS tracking layers
-    if (visibility.showISS && layerData.issLayers.length > 0) {
-      layerData.issLayers.forEach(layer => {
+    
+    if (visibility.showEarthquakes && layerData.earthquakeLayers.length > 0) {
+      layerData.earthquakeLayers.forEach(layer => {
         layers.push(layer.clone({
-          visible: visibility.showISS,
+          visible: visibility.showEarthquakes,
           updateTriggers: {
-            getPosition: currentTime.getTime(),
-            getText: currentTime.getTime(),
-            getPath: currentTime.getTime(),
+            getPosition: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getFillColor: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getRadius: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
+            getText: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
           }
         }));
       });
     }
+    
+    return layers;
+  }, [visibility.showEarthquakes, layerData.earthquakeLayers, layerData.earthquakeLastUpdate, currentTime]);
+
+  // Middle data layers (hurricanes and planes)
+  const middleDataLayers = useMemo(() => {
+    const layers: any[] = [];
 
     // Hurricane tracking layers
     if (visibility.showHurricanes && layerData.hurricaneLayers.length > 0) {
@@ -137,21 +155,6 @@ export const useMapLayers = (
             getPosition: layerData.hurricaneLastUpdate?.getTime() || currentTime.getTime(),
             getText: layerData.hurricaneLastUpdate?.getTime() || currentTime.getTime(),
             getAngle: Math.floor(Date.now() / 100),
-          }
-        }));
-      });
-    }
-
-    // Earthquake tracking layers
-    if (visibility.showEarthquakes && layerData.earthquakeLayers.length > 0) {
-      layerData.earthquakeLayers.forEach(layer => {
-        layers.push(layer.clone({
-          visible: visibility.showEarthquakes,
-          updateTriggers: {
-            getPosition: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
-            getFillColor: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
-            getRadius: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
-            getText: layerData.earthquakeLastUpdate?.getTime() || currentTime.getTime(),
           }
         }));
       });
@@ -174,21 +177,43 @@ export const useMapLayers = (
     
     return layers;
   }, [
-    visibility.showISS, layerData.issLayers, currentTime,
     visibility.showHurricanes, layerData.hurricaneLayers, layerData.hurricaneLastUpdate,
-    visibility.showEarthquakes, layerData.earthquakeLayers, layerData.earthquakeLastUpdate,
-    visibility.showPlanes, layerData.planeLayers, layerData.planeLastUpdate
+    visibility.showPlanes, layerData.planeLayers, layerData.planeLastUpdate,
+    currentTime
   ]);
 
-  // Combine all layers
+  // ISS layers (top-most data layer)
+  const issLayers = useMemo(() => {
+    const layers: any[] = [];
+    
+    if (visibility.showISS && layerData.issLayers.length > 0) {
+      layerData.issLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: visibility.showISS,
+          updateTriggers: {
+            getPosition: currentTime.getTime(),
+            getText: currentTime.getTime(),
+            getPath: currentTime.getTime(),
+          }
+        }));
+      });
+    }
+    
+    return layers;
+  }, [visibility.showISS, layerData.issLayers, currentTime]);
+
+  // Combine all layers (order matters - first layers render at bottom)
   const allLayers = useMemo(() => {
     return [
+      ...earthquakeLayers,      // Bottom-most data layer
       ...staticLayers,
+      ...unescoLayers,          // UNESCO layers (zoom-dependent)
       ...zoomDependentLayers,
       ...timeDependentLayers,
-      ...dataDependentLayers
+      ...middleDataLayers,      // Middle data layers (hurricanes, planes)
+      ...issLayers              // Top-most data layer
     ];
-  }, [staticLayers, zoomDependentLayers, timeDependentLayers, dataDependentLayers]);
+  }, [earthquakeLayers, staticLayers, unescoLayers, zoomDependentLayers, timeDependentLayers, middleDataLayers, issLayers]);
 
   return allLayers;
 };

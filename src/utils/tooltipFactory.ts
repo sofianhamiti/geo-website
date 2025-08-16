@@ -3,6 +3,11 @@
  * Extracts the repetitive tooltip HTML generation logic from Map.tsx
  */
 
+import { HurricaneProcessor } from './HurricaneProcessor';
+
+// Create processor instance for wind speed conversion
+const hurricaneProcessor = new HurricaneProcessor();
+
 // Shared tooltip styling constants
 const TOOLTIP_STYLES = {
   base: {
@@ -170,20 +175,57 @@ export function createISSTooltip(iss: any) {
 }
 
 /**
- * Hurricane position tooltip generator
+ * Hurricane position tooltip generator - handles different position types
  */
-export function createHurricaneTooltip(hurricane: any) {
+export function createHurricaneTooltip(hurricane: any, layerId?: string) {
   const attrs = hurricane.attributes;
   const intensity = attrs.INTENSITY || 0;
   const pressure = attrs.MSLP || 0;
-  const category = attrs.SS || 0;
-  const categoryText = category > 0 ? `Category ${category} Hurricane` : attrs.STORMTYPE || 'Tropical Storm';
+  
+  // Determine category based on layer type and available data
+  let category = 0;
+  let categoryText = 'Tropical Storm';
+  
+  if (layerId === 'hurricane-forecast-positions') {
+    // Forecast positions: calculate category from INTENSITY (wind speed in knots)
+    category = intensity > 0 ? hurricaneProcessor.windSpeedToCategory(intensity) : (attrs.SS || 0);
+    categoryText = category > 0 ? `Category ${category} Hurricane` : attrs.STORMTYPE || 'Tropical Storm';
+  } else if (layerId === 'hurricane-ssnum-forecast-dots') {
+    // SSNUM positions: use SSNUM attribute for category
+    category = attrs.SSNUM || 0;
+    categoryText = category > 0 ? `Category ${category} Hurricane` : attrs.STORMTYPE || 'Tropical Storm';
+  } else {
+    // Current and historical positions: use SS attribute
+    category = attrs.SS || 0;
+    categoryText = category > 0 ? `Category ${category} Hurricane` : attrs.STORMTYPE || 'Tropical Storm';
+  }
+  
   const borderColor = category > 0 ? COLORS.danger : COLORS.primary;
   const badgeColor = category > 2 ? COLORS.danger : category > 0 ? COLORS.warning : COLORS.primary;
   
+  // Handle different timestamp formats
+  let timestampDisplay = '';
+  if (attrs.DTG) {
+    timestampDisplay = new Date(attrs.DTG).toLocaleString();
+  } else if (attrs.VALIDTIME) {
+    timestampDisplay = new Date(attrs.VALIDTIME).toLocaleString();
+  } else {
+    timestampDisplay = 'Unknown';
+  }
+  
+  // Handle forecast hour for SSNUM positions
+  let forecastInfo = '';
+  if (layerId === 'hurricane-ssnum-forecast-dots' && attrs.TAU) {
+    forecastInfo = `
+      <div style="margin-bottom: 3px;">
+        <strong>Forecast Hour:</strong> +${attrs.TAU}h
+      </div>
+    `;
+  }
+  
   const content = `
     <div style="font-weight: 700; color: ${COLORS.hurricane}; margin-bottom: 8px; font-size: 16px;">
-      🌀 ${attrs.STORMNAME || 'Unknown Storm'}
+      🌀 ${attrs.STORMNAME || hurricane.stormName || 'Unknown Storm'}
     </div>
     <div style="margin-bottom: 6px;">
       ${createStatusBadge(categoryText, badgeColor, '12px')}
@@ -195,15 +237,16 @@ export function createHurricaneTooltip(hurricane: any) {
       <div style="margin-bottom: 3px;">
         <strong>Pressure:</strong> ${pressure} mb
       </div>
+      ${forecastInfo}
       <div style="margin-bottom: 3px;">
         <strong>Basin:</strong> ${attrs.BASIN?.toUpperCase() || 'Unknown'}
       </div>
       <div style="margin-bottom: 3px;">
-        <strong>Position:</strong> ${hurricane.geometry.y.toFixed(2)}°N, ${Math.abs(hurricane.geometry.x).toFixed(2)}°W
+        <strong>Position:</strong> ${hurricane.geometry ? hurricane.geometry.y.toFixed(2) : hurricane.attributes.LAT?.toFixed(2) || '?'}°N, ${hurricane.geometry ? Math.abs(hurricane.geometry.x).toFixed(2) : Math.abs(hurricane.attributes.LON || 0).toFixed(2)}°W
       </div>
     </div>
     <div style="color: #9ca3af; font-size: 11px; margin-top: 6px; border-top: 1px solid #374151; padding-top: 6px;">
-      Last updated: ${new Date(attrs.DTG).toLocaleString()}
+      Last updated: ${timestampDisplay}
     </div>
   `;
   
@@ -237,6 +280,27 @@ export function createHurricaneForecastTrackTooltip(object: any) {
   `;
   
   return createTooltipContainer(content, `rgba(59, 130, 246, 0.3)`, 'small', '200px');
+}
+
+/**
+ * Hurricane cone of uncertainty tooltip generator
+ */
+export function createHurricaneConeTooltip(cone: any) {
+  const stormName = cone.STORMNAME || cone.attributes?.STORMNAME || 'Unknown Storm';
+  
+  const content = `
+    <div style="font-weight: 600; color: ${COLORS.hurricane}; margin-bottom: 4px;">
+      🌀 ${stormName}
+    </div>
+    <div style="color: ${COLORS.light}; font-size: 12px;">
+      Cone of uncertainty
+    </div>
+    <div style="color: ${COLORS.lighter}; font-size: 11px; margin-top: 2px;">
+      Probable path area
+    </div>
+  `;
+  
+  return createTooltipContainer(content, `rgba(255, 68, 68, 0.4)`, 'small', '180px');
 }
 
 /**
@@ -357,7 +421,25 @@ export function createLayerTooltip(object: any, layer: any) {
       return createISSTooltip(object);
     
     case 'hurricane-positions':
-      return createHurricaneTooltip(object);
+      return createHurricaneTooltip(object, layer.id);
+    
+    case 'hurricane-historical-positions':
+      return createHurricaneTooltip(object, layer.id);
+    
+    case 'hurricane-forecast-positions':
+      return createHurricaneTooltip(object, layer.id);
+    
+    case 'hurricane-ssnum-forecast-dots':
+      return createHurricaneTooltip(object, layer.id);
+    
+    case 'hurricane-tracks':
+      return createHurricaneObservedTrackTooltip(object);
+    
+    case 'hurricane-ssnum-trajectories':
+      return createHurricaneForecastTrackTooltip(object);
+    
+    case 'hurricane-cones':
+      return createHurricaneConeTooltip(object);
     
     case 'hurricane-observed-tracks':
       return createHurricaneObservedTrackTooltip(object);
