@@ -1,11 +1,3 @@
-/**
- * Hurricane Data Type Definitions
- * Clean, minimal interfaces for hurricane data fetching and processing
- */
-
-/**
- * Raw hurricane position data from ArcGIS REST API
- */
 export interface HurricaneFeature {
   readonly attributes: {
     readonly STORMNAME: string;
@@ -28,9 +20,6 @@ export interface HurricaneFeature {
   };
 }
 
-/**
- * Hurricane trajectory cone data (uncertainty cones)
- */
 export interface TrajectoryFeature {
   readonly attributes: {
     readonly STORMNAME: string;
@@ -45,25 +34,6 @@ export interface TrajectoryFeature {
   };
 }
 
-/**
- * Forecast track centerline data
- */
-export interface ForecastTrackFeature {
-  readonly attributes: {
-    readonly STORMNAME: string;
-    readonly STORMID: string;
-    readonly SS: number;
-    readonly STORMTYPE: string;
-    readonly BASIN: string;
-  };
-  readonly geometry: {
-    readonly paths: readonly (readonly number[][])[];
-  };
-}
-
-/**
- * Track segment with category-based coloring for visualization
- */
 export interface ColoredTrackSegment {
   readonly path: readonly (readonly [number, number])[];
   readonly color: readonly [number, number, number, number];
@@ -73,9 +43,6 @@ export interface ColoredTrackSegment {
   readonly segmentType: 'historical' | 'forecast';
 }
 
-/**
- * Processed storm data ready for clean visualization
- */
 export interface ProcessedStorm {
   readonly stormId: string;
   readonly stormName: string;
@@ -89,21 +56,14 @@ export interface ProcessedStorm {
   readonly coloredTrackSegments: readonly ColoredTrackSegment[];
 }
 
-/**
- * Complete hurricane data structure for the layer
- */
 export interface HurricaneLayerData {
   readonly positions: readonly HurricaneFeature[];
   readonly trajectories: readonly TrajectoryFeature[];
-  readonly tracks: readonly ForecastTrackFeature[];
   readonly processedStorms: readonly ProcessedStorm[];
   readonly lastUpdate: Date | null;
   readonly error: string | null;
 }
 
-/**
- * API response structure from ArcGIS REST service
- */
 export interface HurricaneApiResponse {
   readonly features: readonly any[];
   readonly error?: {
@@ -111,13 +71,4 @@ export interface HurricaneApiResponse {
     readonly message: string;
     readonly details?: readonly string[];
   };
-}
-
-/**
- * Configuration for hurricane API layer numbers
- */
-export interface HurricaneApiLayers {
-  readonly positions: number;
-  readonly tracks: number;
-  readonly trajectories: readonly number[];
 }

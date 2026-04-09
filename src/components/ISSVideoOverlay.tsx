@@ -7,9 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useMapStore } from '../store/mapStore';
 
-interface ISSVideoOverlayProps {}
-
-const ISSVideoOverlay: React.FC<ISSVideoOverlayProps> = () => {
+const ISSVideoOverlay: React.FC = () => {
   const { issVideoVisible, hideISSVideo, map, issManager } = useMapStore();
   const overlayRef = useRef<HTMLDivElement>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
@@ -39,38 +37,22 @@ const ISSVideoOverlay: React.FC<ISSVideoOverlayProps> = () => {
         if (issData?.currentPosition) {
           const { latitude, longitude } = issData.currentPosition;
           
-          // Convert ISS lat/lng to screen coordinates
-          const deckOverlay = (map as any)._deckOverlay;
-          if (deckOverlay) {
-            // Use MapLibre's project method to get screen coordinates
-            const screenCoords = map.project([longitude, latitude]);
-            
-            // Center video directly on ISS icon position (16:9 aspect ratio)
-            const videoWidth = 320;
-            const videoHeight = 180;
-            
-            let left = screenCoords.x - videoWidth / 2; // Center horizontally on ISS
-            let top = screenCoords.y - videoHeight / 2; // Center vertically on ISS
-            
-            // Keep video in viewport with minimal adjustment
-            const padding = 10;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            
-            if (left < padding) {
-              left = padding;
-            } else if (left + videoWidth > viewportWidth - padding) {
-              left = viewportWidth - videoWidth - padding;
-            }
-            
-            if (top < padding) {
-              top = padding;
-            } else if (top + videoHeight > viewportHeight - padding) {
-              top = viewportHeight - videoHeight - padding;
-            }
-            
-            setVideoPosition({ left, top });
-          }
+          const screenCoords = map.project([longitude, latitude]);
+
+          const videoWidth = 320;
+          const videoHeight = 180;
+
+          let left = screenCoords.x - videoWidth / 2;
+          let top = screenCoords.y - videoHeight / 2;
+
+          const padding = 10;
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          left = Math.max(padding, Math.min(left, viewportWidth - videoWidth - padding));
+          top = Math.max(padding, Math.min(top, viewportHeight - videoHeight - padding));
+
+          setVideoPosition({ left, top });
         }
       } catch (error) {
         // Silent error handling for video position updates
@@ -157,7 +139,7 @@ const ISSVideoOverlay: React.FC<ISSVideoOverlayProps> = () => {
       {/* Video area */}
       <div className="relative bg-black" style={{ height: '180px' }}>
         <iframe
-          src="https://www.youtube.com/embed/H999s0P1Er0?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0"
+          src="https://www.youtube.com/embed/zPH5KtjJFaQ?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0"
           width="100%"
           height="100%"
           frameBorder="0"

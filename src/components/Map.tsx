@@ -1,8 +1,3 @@
-/**
- * Streamlined Map Component - Refactored with custom hooks and extracted components
- * Reduced from 984 lines to under 200 lines through aggressive optimization
- */
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { CONFIG } from '../config';
 import { useMapStore } from '../store/mapStore';
@@ -88,7 +83,7 @@ const Map: React.FC = () => {
   // ISS click handler for video overlay
   const handleISSClick = useCallback((info: any) => {
     if (info.object) {
-      setISSVideoVisible(true, [info.x, info.y]);
+      setISSVideoVisible(true);
     }
   }, [setISSVideoVisible]);
 
@@ -200,36 +195,6 @@ const Map: React.FC = () => {
     map.on('zoomend', handleZoomEnd);
     return () => map.off('zoomend', handleZoomEnd);
   }, [map]);
-
-  // Handle basemap switching
-  useEffect(() => {
-    if (!map || !map.getLayer) return;
-
-    // Switch between basemaps
-    if (map.getLayer(CONFIG.layerIds.satellite) && map.getLayer(CONFIG.layerIds.arcgisSatellite)) {
-      map.setLayoutProperty(
-        CONFIG.layerIds.satellite,
-        'visibility',
-        selectedBasemap === 'usgs' ? 'visible' : 'none'
-      );
-      map.setLayoutProperty(
-        CONFIG.layerIds.arcgisSatellite,
-        'visibility',
-        selectedBasemap === 'arcgis' ? 'visible' : 'none'
-      );
-    }
-  }, [selectedBasemap, map]);
-
-  // Handle ArcGIS Places visibility
-  useEffect(() => {
-    if (map && map.getLayer && map.getLayer(CONFIG.layerIds.arcgisPlaces)) {
-      map.setLayoutProperty(
-        CONFIG.layerIds.arcgisPlaces,
-        'visibility',
-        showArcgisPlaces ? 'visible' : 'none'
-      );
-    }
-  }, [showArcgisPlaces, map]);
 
   return (
     <div className="relative w-full h-screen">

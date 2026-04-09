@@ -1,29 +1,9 @@
-/**
- * Custom hook for managing data managers (ISS, Hurricane, Earthquake)
- * Consolidates all manager initialization and cleanup logic
- */
-
 import { useEffect } from 'react';
-import { 
-  createISSLayers, 
-  isISSTrackingConfigured 
-} from '../layers/ISSLayer';
-import { 
-  createHurricaneLayers, 
-  isHurricaneLayerConfigured 
-} from '../layers/HurricaneLayer';
-import {
-  createEarthquakeLayers,
-  isEarthquakeLayerConfigured
-} from '../layers/EarthquakeLayer';
-import {
-  createPlaneLayers,
-  isPlanesLayerConfigured
-} from '../layers/PlanesLayer';
-import {
-  createTimeZonesLayers,
-  isTimeZonesLayerConfigured
-} from '../layers/TimeZonesLayer';
+import { createISSLayers } from '../layers/ISSLayer';
+import { createHurricaneLayers } from '../layers/HurricaneLayer';
+import { createEarthquakeLayers } from '../layers/EarthquakeLayer';
+import { createPlaneLayers } from '../layers/PlanesLayer';
+import { createTimeZonesLayers } from '../layers/TimeZonesLayer';
 
 interface ManagerState {
   showISS: boolean;
@@ -66,7 +46,7 @@ export const useDataManagers = (
   
   // ISS Manager Effects
   useEffect(() => {
-    if (state.showISS && isISSTrackingConfigured() && !state.issManager) {
+    if (state.showISS && !state.issManager) {
       actions.initializeISSManager();
     } else if (!state.showISS && state.issManager) {
       actions.destroyISSManager();
@@ -88,7 +68,7 @@ export const useDataManagers = (
 
   // Hurricane Manager Effects
   useEffect(() => {
-    if (state.showHurricanes && isHurricaneLayerConfigured() && !state.hurricaneManager) {
+    if (state.showHurricanes && !state.hurricaneManager) {
       actions.initializeHurricaneManager();
     } else if (!state.showHurricanes && state.hurricaneManager) {
       actions.destroyHurricaneManager();
@@ -111,7 +91,7 @@ export const useDataManagers = (
 
   // Earthquake Manager Effects
   useEffect(() => {
-    if (state.showEarthquakes && isEarthquakeLayerConfigured() && !state.earthquakeManager) {
+    if (state.showEarthquakes && !state.earthquakeManager) {
       actions.initializeEarthquakeManager();
     } else if (!state.showEarthquakes && state.earthquakeManager) {
       actions.destroyEarthquakeManager();
@@ -134,7 +114,7 @@ export const useDataManagers = (
 
   // Planes Manager Effects
   useEffect(() => {
-    if (state.showPlanes && isPlanesLayerConfigured() && !state.planeManager) {
+    if (state.showPlanes && !state.planeManager) {
       actions.initializePlaneManager();
     } else if (!state.showPlanes && state.planeManager) {
       actions.destroyPlaneManager();
@@ -157,7 +137,7 @@ export const useDataManagers = (
 
   // Timezone Manager Effects
   useEffect(() => {
-    if (state.showTimezones && isTimeZonesLayerConfigured()) {
+    if (state.showTimezones) {
       createTimeZonesLayers().then(layers => {
         if (layers && layers.length > 0) {
           actions.setTimezoneLayers(layers);

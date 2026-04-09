@@ -1,8 +1,3 @@
-/**
- * Tooltip Factory - Centralized tooltip generation for map layers
- * Extracts the repetitive tooltip HTML generation logic from Map.tsx
- */
-
 import { HurricaneProcessor } from './HurricaneProcessor';
 
 // Create processor instance for wind speed conversion
@@ -440,12 +435,6 @@ export function createLayerTooltip(object: any, layer: any) {
     
     case 'hurricane-cones':
       return createHurricaneConeTooltip(object);
-    
-    case 'hurricane-observed-tracks':
-      return createHurricaneObservedTrackTooltip(object);
-    
-    case 'hurricane-forecast-tracks':
-      return createHurricaneForecastTrackTooltip(object);
     
     case 'earthquake-positions':
       return createEarthquakeTooltip(object);

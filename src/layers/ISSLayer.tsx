@@ -251,9 +251,3 @@ export function createISSLayers(currentTime: Date, onISSClick?: (info: any) => v
   return layers;
 }
 
-/**
- * Check if ISS tracking is properly configured (always true - no API key needed)
- */
-export function isISSTrackingConfigured(): boolean {
-  return true;
-}

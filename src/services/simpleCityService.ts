@@ -1,8 +1,3 @@
-/**
- * Simple City Service - No external libraries, just a curated city list
- * Users can pick from popular cities, no geocoding API bullshit
- */
-
 import { safeSyncOperation } from '../utils/errorHandler';
 
 export interface City {
@@ -59,115 +54,6 @@ export const DEFAULT_CITIES: City[] = [
   },
 ];
 
-// Popular cities users can add
-export const POPULAR_CITIES: City[] = [
-  {
-    id: 'tokyo',
-    name: 'Tokyo',
-    country: 'Japan',
-    coordinates: [139.6917, 35.6895],
-    timezone: 'Asia/Tokyo',
-  },
-  {
-    id: 'sydney',
-    name: 'Sydney',
-    country: 'Australia',
-    coordinates: [151.2093, -33.8688],
-    timezone: 'Australia/Sydney',
-  },
-  {
-    id: 'singapore',
-    name: 'Singapore',
-    country: 'Singapore',
-    coordinates: [103.8198, 1.3521],
-    timezone: 'Asia/Singapore',
-  },
-  {
-    id: 'hong-kong',
-    name: 'Hong Kong',
-    country: 'China',
-    coordinates: [114.1694, 22.3193],
-    timezone: 'Asia/Hong_Kong',
-  },
-  {
-    id: 'mumbai',
-    name: 'Mumbai',
-    country: 'India',
-    coordinates: [72.8777, 19.0760],
-    timezone: 'Asia/Kolkata',
-  },
-  {
-    id: 'sao-paulo',
-    name: 'São Paulo',
-    country: 'Brazil',
-    coordinates: [-46.6333, -23.5505],
-    timezone: 'America/Sao_Paulo',
-  },
-  {
-    id: 'mexico-city',
-    name: 'Mexico City',
-    country: 'Mexico',
-    coordinates: [-99.1332, 19.4326],
-    timezone: 'America/Mexico_City',
-  },
-  {
-    id: 'los-angeles',
-    name: 'Los Angeles',
-    country: 'United States',
-    coordinates: [-118.2437, 34.0522],
-    timezone: 'America/Los_Angeles',
-  },
-  {
-    id: 'chicago',
-    name: 'Chicago',
-    country: 'United States',
-    coordinates: [-87.6298, 41.8781],
-    timezone: 'America/Chicago',
-  },
-  {
-    id: 'toronto',
-    name: 'Toronto',
-    country: 'Canada',
-    coordinates: [-79.3832, 43.6532],
-    timezone: 'America/Toronto',
-  },
-  {
-    id: 'berlin',
-    name: 'Berlin',
-    country: 'Germany',
-    coordinates: [13.4050, 52.5200],
-    timezone: 'Europe/Berlin',
-  },
-  {
-    id: 'madrid',
-    name: 'Madrid',
-    country: 'Spain',
-    coordinates: [-3.7038, 40.4168],
-    timezone: 'Europe/Madrid',
-  },
-  {
-    id: 'rome',
-    name: 'Rome',
-    country: 'Italy',
-    coordinates: [12.4964, 41.9028],
-    timezone: 'Europe/Rome',
-  },
-  {
-    id: 'amsterdam',
-    name: 'Amsterdam',
-    country: 'Netherlands',
-    coordinates: [4.9041, 52.3676],
-    timezone: 'Europe/Amsterdam',
-  },
-  {
-    id: 'stockholm',
-    name: 'Stockholm',
-    country: 'Sweden',
-    coordinates: [18.0686, 59.3293],
-    timezone: 'Europe/Stockholm',
-  },
-];
-
 /**
  * Get formatted local time for a city
  */
@@ -184,9 +70,6 @@ export function getCityLocalTime(timezone: string, currentTime: Date): string {
     currentTime.getUTCMinutes().toString().padStart(2, '0')
   );
 }
-
-// Manual collision logic removed - now handled by Deck.gl TextLayer collision detection
-
 
 /**
  * Simple localStorage helpers

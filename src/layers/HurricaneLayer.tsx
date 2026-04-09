@@ -1,17 +1,3 @@
-/**
- * Hurricane Layer - ACTUALLY FUCKING SIMPLIFIED
- * Single file implementation following the pattern of other layers
- * 
- * Collapsed from 6 separate files into one cohesive layer following
- * the same pattern as EarthquakeLayer and PlanesLayer.
- * 
- * Features:
- * - All layer creation in one place
- * - Uses centralized tooltip factory (NO inline tooltips)
- * - Proper layer IDs matching tooltip factory expectations
- * - Consistent with other layer patterns
- */
-
 import { PolygonLayer, PathLayer, ScatterplotLayer, IconLayer, TextLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import { CONFIG } from '../config';
@@ -432,65 +418,25 @@ export function createHurricaneLayers(): Layer[] {
   const currentLayer = createCurrentPositionLayer(data.processedStorms || []);
   if (currentLayer) layers.push(currentLayer);
 
-  console.log('🌀 Total hurricane layers created:', layers.length);
   return layers;
 }
 
-/**
- * Check if hurricane layer is properly configured
- */
-export function isHurricaneLayerConfigured(): boolean {
-  return true; // Always available since we're using Esri's public service
-}
-
-/**
- * Hurricane Manager using the new HurricaneDataManager
- * 
- * Maintains backward compatibility with existing code that uses
- * the HurricaneManager class directly.
- */
 export class HurricaneManager {
-  /**
-   * Start the manager (delegates to HurricaneDataManager.initialize)
-   */
   public async start(): Promise<void> {
     await hurricaneDataManager.initialize();
   }
 
-  /**
-   * Stop the manager (delegates to HurricaneDataManager.destroy)
-   */
   public stop(): void {
     hurricaneDataManager.destroy();
   }
 
-  /**
-   * Get current data
-   */
   public getData() {
     return hurricaneDataManager.getData();
   }
 
-  /**
-   * Manual refresh
-   */
   public async refresh(): Promise<void> {
     return hurricaneDataManager.refresh();
   }
 }
 
-/**
- * Export the singleton data manager instance for direct usage
- */
 export { hurricaneDataManager };
-
-/**
- * Export types for backward compatibility
- */
-export type {
-  HurricaneFeature,
-  TrajectoryFeature,
-  ColoredTrackSegment,
-  ProcessedStorm,
-  HurricaneLayerData
-} from '../types/hurricane';

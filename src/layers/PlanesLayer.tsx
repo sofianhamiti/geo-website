@@ -106,8 +106,6 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
     return tokenCache.token;
   }
 
-  console.log('🛩️ Getting new OAuth2 access token...');
-  
   const response = await fetch(CONFIG.styles.planes.oauth2.tokenEndpoint, {
     method: 'POST',
     headers: {
@@ -132,7 +130,6 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
     expiresAt: Date.now() + CONFIG.styles.planes.oauth2.tokenCacheExpirationMs,
   };
 
-  console.log('🛩️ OAuth2 access token obtained successfully');
   return tokenData.access_token;
 }
 
@@ -184,19 +181,15 @@ async function fetchAircraftData(): Promise<OpenSkyResponse> {
       
       // Handle OAuth2 client credentials flow
       if (credentials.clientId && credentials.clientSecret) {
-        console.log('🛩️ Using OAuth2 Client Credentials flow');
         const accessToken = await getAccessToken(credentials.clientId, credentials.clientSecret);
         headers = {
           'Authorization': `Bearer ${accessToken}`
         };
         usingAuth = true;
-        console.log('🛩️ Using OAuth2 authenticated requests');
-      } else {
-        console.log('🛩️ No valid credentials found, using anonymous requests');
       }
     }
   } catch (error) {
-    console.log('🛩️ Authentication failed, using anonymous requests:', error);
+    // Authentication unavailable, using anonymous requests
   }
 
   const response = await fetch(url, { headers });
@@ -206,8 +199,7 @@ async function fetchAircraftData(): Promise<OpenSkyResponse> {
       throw new Error(`OpenSky API rate limit exceeded. ${usingAuth ? 'Try reducing update frequency.' : 'Consider adding valid credentials for higher limits.'}`);
     }
     if (response.status === 401 && usingAuth) {
-      console.log('🛩️ Authentication failed, token may be expired. Clearing cache and falling back to anonymous requests');
-      tokenCache = null; // Clear expired token
+      tokenCache = null;
       // Retry without authentication
       const retryResponse = await fetch(url);
       if (!retryResponse.ok) {
@@ -228,34 +220,20 @@ async function fetchAircraftData(): Promise<OpenSkyResponse> {
 async function updateAircraftData(): Promise<void> {
   const result = await safeAsyncOperation(
     async () => {
-      console.log('🛩️ Fetching aircraft data from OpenSky API...');
       const data = await fetchAircraftData();
-      
-      console.log('🛩️ Raw API response:', {
-        time: data.time,
-        statesCount: data.states?.length || 0,
-        statesNull: data.states === null
-      });
-      
-      // Validate response structure
+
       if (!data.states || !Array.isArray(data.states)) {
         throw new Error('Invalid OpenSky response format');
       }
       
-      // Parse all aircraft - no filtering, show everything
       const validAircraft: OpenSkyStateVector[] = [];
-      
+
       for (const stateArray of data.states) {
         const aircraft = parseStateVector(stateArray);
         if (aircraft) {
           validAircraft.push(aircraft);
         }
       }
-      
-      console.log('🛩️ Aircraft processed:', {
-        total: data.states.length,
-        parsed: validAircraft.length
-      });
       
       // Calculate active aircraft count (not on ground)
       const activeCount = validAircraft.filter(aircraft => !aircraft.on_ground).length;
@@ -321,16 +299,8 @@ function getAircraftSize(): number {
 export function createPlaneLayers(currentTime: Date): Layer[] {
   const layers: Layer[] = [];
   const { aircraft, error } = planeDataCache;
-  
-  console.log('🛩️ createPlaneLayers called:', {
-    aircraftCount: aircraft.length,
-    error: error,
-    cacheData: planeDataCache
-  });
 
-  // Error handling - show error message if API fails
   if (error) {
-    console.log('🛩️ Showing error layer:', error);
     layers.push(new TextLayer({
       id: 'planes-error',
       data: [{ position: [0, 0], text: `Aircraft Error: ${error}` }],
@@ -350,15 +320,6 @@ export function createPlaneLayers(currentTime: Date): Layer[] {
 
   // Main aircraft icons layer
   if (aircraft.length > 0) {
-    console.log('🛩️ Creating IconLayer with:', {
-      aircraftCount: aircraft.length,
-      sampleAircraft: aircraft.slice(0, 3).map((a: OpenSkyStateVector) => ({
-        icao24: a.icao24,
-        position: [a.longitude, a.latitude],
-        category: a.category
-      }))
-    });
-    
     layers.push(new IconLayer({
       id: CONFIG.layerIds.planePositions,
       data: aircraft,
@@ -383,17 +344,8 @@ export function createPlaneLayers(currentTime: Date): Layer[] {
         getAngle: currentTime.getTime(),
       },
     }));
-  } else {
-    console.log('🛩️ No aircraft to display - empty layer array returned');
   }
 
-  console.log('🛩️ Returning layers:', layers.length);
   return layers;
 }
 
-/**
- * Check if planes layer is properly configured (always true - no API key needed)
- */
-export function isPlanesLayerConfigured(): boolean {
-  return true;
-}

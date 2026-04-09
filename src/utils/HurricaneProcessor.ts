@@ -454,18 +454,6 @@ export class HurricaneProcessor {
       return segments;
     }
     
-    // DEBUG: Log what fields we have in forecast positions
-    if (forecastPositions.length > 0) {
-      console.log('🌀 DEBUG - Forecast position attributes:', {
-        stormName,
-        firstForecastAttrs: forecastPositions[0].attributes,
-        availableFields: Object.keys(forecastPositions[0].attributes),
-        SS_values: forecastPositions.map(p => p.attributes.SS),
-        INTENSITY_values: forecastPositions.map(p => p.attributes.INTENSITY),
-        FCST_HR_values: forecastPositions.map(p => p.attributes.FCST_HR)
-      });
-    }
-    
     // Connect current to first forecast
     const firstForecast = forecastPositions[0];
     const currentCategory = currentPosition.attributes.SS || 0;
@@ -488,8 +476,7 @@ export class HurricaneProcessor {
       const currentForecast = forecastPositions[i];
       const nextForecast = forecastPositions[i + 1];
       
-      // THE FUCKING FIX: Use INTENSITY field and convert to category
-      // SS is always 0 for forecasts, but INTENSITY has the wind speed
+      // SS is always 0 for forecasts — use INTENSITY (wind speed) instead
       const windSpeed = currentForecast.attributes.INTENSITY || 0;
       const categoryAtTime = windSpeed > 0 ? this.windSpeedToCategory(windSpeed) : (currentForecast.attributes.SS || 0);
       const forecastColor = this.getCategoryColor(categoryAtTime);
@@ -509,19 +496,4 @@ export class HurricaneProcessor {
     
     return segments;
   }
-}
-
-/**
- * Utility function to get category text description
- *
- * @param category - Hurricane category (0-5)
- * @returns Human-readable category description
- */
-export function getCategoryText(category: number): string {
-  if (category >= 5) return 'Cat 5 Hurricane';
-  if (category >= 4) return 'Cat 4 Hurricane';
-  if (category >= 3) return 'Cat 3 Hurricane';
-  if (category >= 2) return 'Cat 2 Hurricane';
-  if (category >= 1) return 'Cat 1 Hurricane';
-  return 'Tropical Storm';
 }

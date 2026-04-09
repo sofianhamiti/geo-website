@@ -276,10 +276,4 @@ export function createEarthquakeLayers(currentTime: Date, currentZoom: number = 
   return layers;
 }
 
-/**
- * Check if earthquake layer is properly configured (always true - no API key needed)
- */
-export function isEarthquakeLayerConfigured(): boolean {
-  return true;
-}
 

@@ -1,8 +1,3 @@
-/**
- * UNESCO World Heritage Sites Layer - CSV Based
- * Loads UNESCO sites from local CSV file - no network bullshit
- */
-
 import { IconLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import Papa from 'papaparse';
@@ -160,50 +155,3 @@ export async function createUnescoLayers(zoom: number = 3): Promise<Layer[]> {
   ];
 }
 
-/**
- * Create optimized UNESCO layer that can be updated instead of recreated
- */
-export async function createOptimizedUnescoLayer(): Promise<Layer | null> {
-  const allSites = await loadUnescoSitesFromCSV();
-  
-  if (allSites.length === 0) {
-    return null;
-  }
-
-  // Create layer with initial zoom state, will be updated via props
-  return new IconLayer({
-    id: 'unesco-sites-optimized',
-    data: allSites,
-    pickable: true,
-    
-    getPosition: (d: UnescoSite) => [d.longitude, d.latitude],
-    getIcon: (d: UnescoSite, { zoom = 3 }: { zoom?: number } = {}) => {
-      const isPin = zoom > 5;
-      const isDanger = d.danger === 1;
-      
-      return {
-        url: isPin 
-          ? (isDanger ? ICON_CACHE.pin.danger : ICON_CACHE.pin.safe)
-          : (isDanger ? ICON_CACHE.circular.danger : ICON_CACHE.circular.safe),
-        width: 128,
-        height: 128,
-        anchorY: isPin ? 24 : 12,
-      };
-    },
-    getSize: ({ zoom = 3 }: { zoom?: number } = {}) => zoom > 5 ? 24 : 16,
-    
-    // Fixed sizing - no zoom scaling
-    sizeUnits: 'pixels',
-    sizeScale: 1.0,
-    sizeMinPixels: 16,
-    sizeMaxPixels: 24,
-    
-    // Include transparent pixels for proper hover detection
-    alphaCutoff: -1,
-    
-    // No visual highlight - tooltips provide feedback
-    autoHighlight: false,
-  });
-}
-
-// Removed unused export functions: getUnescoSiteCount, getSitesByDangerStatus

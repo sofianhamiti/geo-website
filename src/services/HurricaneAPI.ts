@@ -1,9 +1,3 @@
-/**
- * Hurricane API Service
- * Clean data fetching service following established project patterns
- * Consolidates all hurricane data fetching logic from HurricaneLayer.tsx
- */
-
 import { CONFIG } from '../config';
 import { safeAsyncOperation } from '../utils/errorHandler';
 import type {
@@ -13,10 +7,6 @@ import type {
   HurricaneLayerData
 } from '../types/hurricane';
 
-/**
- * Hurricane API Service Class
- * Provides clean, centralized access to hurricane data from ArcGIS REST services
- */
 export class HurricaneAPI {
   private readonly serviceUrl: string;
   private readonly apiLayers: typeof CONFIG.weather.hurricanes.apiLayers;
@@ -125,30 +115,18 @@ export class HurricaneAPI {
     );
   }
 
-  // Removed fetchTracks() method - unused since we now use SSNUM trajectory coloring from Layer 0
-
-  /**
-   * Fetch optimized hurricane data - removed unused Layer 2 (tracks)
-   * Now only fetches what we actually use: positions, trajectories, and SSNUM data
-   * @returns Promise resolving to complete hurricane layer data
-   */
   async fetchAllData(): Promise<HurricaneLayerData> {
     return safeAsyncOperation(
       async () => {
-        // Optimized: Only fetch what we actually use (removed unused Layer 2 tracks)
         const [positions, trajectories] = await Promise.all([
           this.fetchPositions(),
           this.fetchTrajectories()
-          // Removed fetchTracks() - Layer 2 is unused since we use SSNUM trajectories
         ]);
-        const tracks: any[] = []; // Empty since we don't use Layer 2 anymore
 
-        // Return structured data ready for layer consumption
         return {
           positions,
           trajectories,
-          tracks,
-          processedStorms: [], // Will be processed by layer logic
+          processedStorms: [],
           lastUpdate: new Date(),
           error: null
         } as HurricaneLayerData;
@@ -157,7 +135,6 @@ export class HurricaneAPI {
       {
         positions: [],
         trajectories: [],
-        tracks: [],
         processedStorms: [],
         lastUpdate: null,
         error: 'Failed to fetch hurricane data'

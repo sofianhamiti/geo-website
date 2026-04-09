@@ -1,8 +1,3 @@
-/**
- * Solar calculations utility using SunCalc library
- * Provides accurate solar position and terminator calculations
- */
-
 import SunCalc from 'suncalc';
 
 export interface TerminatorPoint {
@@ -10,36 +5,24 @@ export interface TerminatorPoint {
   latitude: number;
 }
 
-/**
- * Generate terminator line coordinates using SunCalc
- * This creates the day/night boundary line on Earth
- */
 export function generateTerminatorCoordinates(
   date: Date = new Date(),
   resolution: number = 360
 ): TerminatorPoint[] {
   const points: TerminatorPoint[] = [];
-  
-  // Generate points along longitudes
+
   for (let i = 0; i <= resolution; i++) {
     const longitude = (i * 360 / resolution) - 180;
     const latitude = findTerminatorLatitude(longitude, date);
-    
+
     if (latitude !== null && !isNaN(latitude)) {
       points.push({ longitude, latitude });
-      
-      // Debug: log first few points
     }
   }
-  
-  
+
   return points;
 }
 
-/**
- * Find the latitude where the sun is at the horizon for a given longitude and time
- * Uses binary search with SunCalc for accurate results
- */
 function findTerminatorLatitude(longitude: number, date: Date): number | null {
   let minLat = -90;
   let maxLat = 90;
@@ -75,26 +58,6 @@ function findTerminatorLatitude(longitude: number, date: Date): number | null {
   return result;
 }
 
-
-/**
- * Get solar position for debugging/information
- */
-export function getSolarPosition(date: Date, latitude: number, longitude: number) {
-  const position = SunCalc.getPosition(date, latitude, longitude);
-  return {
-    altitude: position.altitude * (180 / Math.PI), // Convert to degrees
-    azimuth: position.azimuth * (180 / Math.PI),   // Convert to degrees
-    raw: position
-  };
-}
-
-/**
- * Get sun times for a location (sunrise, sunset, etc.)
- */
-export function getSunTimes(date: Date, latitude: number, longitude: number) {
-  return SunCalc.getTimes(date, latitude, longitude);
-}
-
 /**
  * Parse hex color to RGBA array for deck.gl
  */
@@ -122,9 +85,6 @@ export function parseColorToRGBA(colorHex: string): [number, number, number, num
   return [r, g, b, a];
 }
 
-/**
- * Validate terminator coordinates
- */
 export function validateTerminatorCoordinates(coordinates: TerminatorPoint[]): boolean {
   return (
     Array.isArray(coordinates) &&

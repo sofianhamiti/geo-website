@@ -8,7 +8,7 @@ import { forceSimulation, forceCollide, forceX, forceY } from 'd3-force';
 import { City, getCityLocalTime } from '../services/simpleCityService';
 import { CONFIG } from '../config';
 
-export interface CityTimesLayerData {
+interface CityTimesLayerData {
   city: City;
   time: string;
   position: [number, number];
@@ -199,4 +199,3 @@ export function createCityTimesLayers(cities: City[], currentTime: Date): any[] 
   return layers;
 }
 
-// CityTimesLayerManager class removed - use createCityTimesLayers() directly

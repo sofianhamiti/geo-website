@@ -1,9 +1,3 @@
-/**
- * Unified Map Store - Replaces scattered global state
- * Uses Zustand for simple, reactive state management
- * Includes centralized time management for synchronized component updates
- */
-
 import { create } from 'zustand';
 import { City, DEFAULT_CITIES, loadUserCities, saveUserCities } from '../services/simpleCityService';
 import { ISSManager } from '../layers/ISSLayer';
@@ -36,7 +30,6 @@ export interface MapState {
   
   // ISS video overlay
   issVideoVisible: boolean;
-  issVideoPosition: [number, number] | null;
   
   // Hurricane tracking
   showHurricanes: boolean;
@@ -67,7 +60,6 @@ export interface MapState {
   
   // Centralized time management
   currentTime: Date;
-  lastUpdate: Date | null;
   
   // City management
   cities: City[];
@@ -84,7 +76,6 @@ export interface MapState {
   toggleUnesco: () => void;
   toggleTimezones: () => void;
   toggleMenu: () => void;
-  setLastUpdate: (date: Date) => void;
   updateTime: () => void;
   
   
@@ -96,7 +87,7 @@ export interface MapState {
   setISSLoading: (loading: boolean) => void;
   
   // ISS video actions
-  setISSVideoVisible: (visible: boolean, position?: [number, number] | null) => void;
+  setISSVideoVisible: (visible: boolean) => void;
   hideISSVideo: () => void;
   
   // Hurricane actions
@@ -150,7 +141,6 @@ export const useMapStore = create<MapState>((set, get) => ({
   issManager: null,
   isISSLoading: false,
   issVideoVisible: false,
-  issVideoPosition: null,
   showHurricanes: false,
   hurricaneLayers: [],
   hurricaneManager: null,
@@ -169,7 +159,6 @@ export const useMapStore = create<MapState>((set, get) => ({
   timezoneLayers: [],
   isMenuOpen: false,
   currentTime: new Date(),
-  lastUpdate: null,
   cities: [...DEFAULT_CITIES], // Start with defaults
   isAddingCity: false,
 
@@ -213,9 +202,8 @@ export const useMapStore = create<MapState>((set, get) => ({
           map.setLayoutProperty(layerId, 'visibility', 'visible');
         }
         
-        // Basemap switched successfully
       } catch (error) {
-        // Error switching basemap - continue silently
+        // Continue silently on error
       }
     }
     set({ selectedBasemap: basemap });
@@ -227,7 +215,7 @@ export const useMapStore = create<MapState>((set, get) => ({
     
     if (map) {
       map.setLayoutProperty(
-        'arcgis-places-layer', // Keep hardcoded since CONFIG import would create circular dependency
+        'arcgis-places-layer',
         'visibility',
         newShowArcgisPlaces ? 'visible' : 'none'
       );
@@ -236,49 +224,18 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ showArcgisPlaces: newShowArcgisPlaces });
   },
   
-  toggleTerminator: () => {
-    const currentState = get().showTerminator;
-    const newState = !currentState;
-    set({ showTerminator: newState });
-  },
-  
-  toggleCities: () => {
-    const currentState = get().showCities;
-    const newState = !currentState;
-    set({ showCities: newState });
-  },
-  
-  toggleMountains: () => {
-    const currentState = get().showMountains;
-    const newState = !currentState;
-    set({ showMountains: newState });
-  },
-  
-  toggleUnesco: () => {
-    const currentState = get().showUnesco;
-    const newState = !currentState;
-    set({ showUnesco: newState });
-  },
-  
-  toggleTimezones: () => {
-    const currentState = get().showTimezones;
-    const newState = !currentState;
-    set({ showTimezones: newState });
-  },
+  toggleTerminator: () => set({ showTerminator: !get().showTerminator }),
+  toggleCities: () => set({ showCities: !get().showCities }),
+  toggleMountains: () => set({ showMountains: !get().showMountains }),
+  toggleUnesco: () => set({ showUnesco: !get().showUnesco }),
+  toggleTimezones: () => set({ showTimezones: !get().showTimezones }),
   
   toggleMenu: () => {
     set({ isMenuOpen: !get().isMenuOpen });
   },
   
-  setLastUpdate: (date) => set({ lastUpdate: date }),
-  
-  // Centralized time management
   updateTime: () => {
-    const now = new Date();
-    set({
-      currentTime: now,
-      lastUpdate: now
-    });
+    set({ currentTime: new Date() });
   },
 
 
@@ -329,19 +286,12 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ isISSLoading: loading });
   },
 
-  // ISS video actions
-  setISSVideoVisible: (visible, position = null) => {
-    set({ 
-      issVideoVisible: visible, 
-      issVideoPosition: position 
-    });
+  setISSVideoVisible: (visible) => {
+    set({ issVideoVisible: visible });
   },
 
   hideISSVideo: () => {
-    set({
-      issVideoVisible: false,
-      issVideoPosition: null
-    });
+    set({ issVideoVisible: false });
   },
 
   // Hurricane actions
@@ -378,7 +328,6 @@ export const useMapStore = create<MapState>((set, get) => ({
       set({ hurricaneManager: manager, isHurricanesLoading: false });
     } catch (error) {
       set({ isHurricanesLoading: false });
-      console.error('❌ Failed to initialize Hurricane Manager:', error);
       throw error;
     }
   },
@@ -510,10 +459,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   addCity: (city) => {
     const currentCities = get().cities;
     // Limit to 10 cities max
-    if (currentCities.length >= 10) {
-      console.warn('Maximum 10 cities allowed');
-      return;
-    }
+    if (currentCities.length >= 10) return;
     
     const newCities = [...currentCities, city];
     set({ cities: newCities });

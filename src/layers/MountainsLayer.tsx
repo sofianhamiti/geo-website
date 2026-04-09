@@ -1,8 +1,3 @@
-/**
- * Mountains Layer - Professional Cartographic Peak Markers
- * Using Iconify icons for authentic mountain symbols
- */
-
 import { IconLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import { CONFIG } from '../config';
@@ -30,15 +25,9 @@ const MOUNTAINS: Mountain[] = [
   { name: 'Matterhorn', country: 'Switzerland/Italy', coordinates: [7.6583, 45.9763], elevation: 4478, range: 'Alps', sevenSummits: false },
 ];
 
-/**
- * Fixed mountain icon size - no more fucking zoom scaling
- */
 function getMountainSize(): number {
-  // Fixed size - no zoom dependency bullshit
-  return 26; // Perfect size for visibility and hover detection
+  return 26;
 }
-
-// Removed unused formatElevation function
 
 
 /**
@@ -61,9 +50,6 @@ function getVisibleMountains(zoom: number): Mountain[] {
   return MOUNTAINS;
 }
 
-/**
- * Create reliable mountain peak icons with the EXACT fucking icon you provided
- */
 function createMountainPeaksLayer(mountains: Mountain[]): IconLayer {
   // The exact SVG - alphaCutoff handles transparent pixel detection
   function getMountainIconDataUri(): string {
@@ -120,4 +106,3 @@ export function createMountainsLayers(zoom: number = 2): Layer[] {
   ];
 }
 
-// Removed unused export functions: getMountainCount, getSevenSummitsCount
