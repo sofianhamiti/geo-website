@@ -3,7 +3,7 @@
  * Real-time earthquake data with magnitude-based styling and significance filtering
  */
 
-import { IconLayer, TextLayer } from '@deck.gl/layers';
+import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import { CONFIG } from '../config';
 import { safeAsyncOperation } from '../utils/errorHandler';
@@ -80,8 +80,6 @@ let earthquakeDataCache: EarthquakeLayerData = {
   significantCount: 0,
 };
 
-// Generate earthquake epicenter SVG icon data URL from config (same pattern as ISS)
-const EARTHQUAKE_EPICENTER_ICON = `data:image/svg+xml;base64,${btoa(CONFIG.styles.earthquakes.icon.svgData)}`;
 
 /**
  * Fetch earthquake data from USGS API
@@ -179,11 +177,10 @@ export class EarthquakeManager extends BaseDataManager<EarthquakeLayerData> {
 /**
  * Get magnitude-based size
  */
-function getMagnitudeSize(magnitude: number): number {
-  const magSizes = CONFIG.styles.earthquakes.magnitudeSizes;
-  const magLevel = Math.floor(Math.max(0, magnitude));
-  const sizeKey = Math.min(magLevel, 9); // Cap at magnitude 9
-  return magSizes[sizeKey as keyof typeof magSizes] || magSizes[0];
+function getEarthquakeRadius(magnitude: number): number {
+  // Exponential scaling — Richter is logarithmic, so each +1 = ~3x energy
+  // M4=4px, M4.5=6px, M5=8px, M6=16px, M7=32px, M8=64px
+  return Math.pow(2, magnitude - 4) * 4;
 }
 
 
@@ -214,11 +211,10 @@ function getFilteredEarthquakes(zoom: number, earthquakes: USGSEarthquakeFeature
 /**
  * Create earthquake visualization layers
  */
-export function createEarthquakeLayers(currentTime: Date, currentZoom: number = 2): Layer[] {
+export function createEarthquakeLayers(_currentTime: Date, currentZoom: number = 2, pulsePhase: number = 0): Layer[] {
   const layers: Layer[] = [];
   const { earthquakes, error } = earthquakeDataCache;
 
-  // Error handling - show error message if API fails
   if (error) {
     layers.push(new TextLayer({
       id: 'earthquake-error',
@@ -237,40 +233,71 @@ export function createEarthquakeLayers(currentTime: Date, currentZoom: number = 
     return layers;
   }
 
-  // Apply level-of-detail filtering
   const filteredEarthquakes = getFilteredEarthquakes(currentZoom, earthquakes);
 
-  // Main earthquake epicenter icons layer
   if (filteredEarthquakes.length > 0) {
-    layers.push(new IconLayer({
+    const PHI = 1.618;
+    const RING_COUNT = 5;
+    const RING_LINE_WIDTHS = [2.5, 2.0, 1.5, 1.2, 1.0];
+
+    for (let i = 0; i < RING_COUNT; i++) {
+      const phase = (pulsePhase + i / RING_COUNT) % 1;
+      const ringScale = Math.pow(PHI, i * 0.4) * (1 + phase * 0.8);
+      const fadeIn = Math.min(phase / 0.15, 1);
+      const fadeOut = Math.max(0, 1 - phase);
+      const ringOpacity = fadeIn * fadeOut * Math.max(0.1, 0.5 - i * 0.08);
+
+      layers.push(new ScatterplotLayer({
+        id: `earthquake-pulse-ring-${i}`,
+        data: filteredEarthquakes,
+        getPosition: (d: USGSEarthquakeFeature) => [
+          d.geometry.coordinates[0],
+          d.geometry.coordinates[1]
+        ],
+        getRadius: (d: USGSEarthquakeFeature) => getEarthquakeRadius(d.properties.mag),
+        radiusScale: ringScale,
+        radiusUnits: 'pixels',
+        getFillColor: [0, 0, 0, 0],
+        getLineColor: [220, 30, 30],
+        opacity: ringOpacity,
+        getLineWidth: RING_LINE_WIDTHS[i],
+        stroked: true,
+        filled: false,
+        lineWidthUnits: 'pixels',
+        pickable: false,
+      }));
+    }
+
+    // Red epicenter dot — scales with magnitude
+    layers.push(new ScatterplotLayer({
+      id: 'earthquake-epicenter-dots',
+      data: filteredEarthquakes,
+      getPosition: (d: USGSEarthquakeFeature) => [
+        d.geometry.coordinates[0],
+        d.geometry.coordinates[1]
+      ],
+      getRadius: (d: USGSEarthquakeFeature) => Math.max(2, getEarthquakeRadius(d.properties.mag) * 0.25),
+      radiusUnits: 'pixels',
+      filled: true,
+      stroked: false,
+      getFillColor: [220, 30, 30, 255],
+      pickable: false,
+    }));
+
+    // Invisible pickable layer for tooltip interaction
+    layers.push(new ScatterplotLayer({
       id: CONFIG.layerIds.earthquakePositions,
       data: filteredEarthquakes,
       getPosition: (d: USGSEarthquakeFeature) => [
-        d.geometry.coordinates[0], // longitude
-        d.geometry.coordinates[1]  // latitude
+        d.geometry.coordinates[0],
+        d.geometry.coordinates[1]
       ],
-      getIcon: () => ({
-        url: EARTHQUAKE_EPICENTER_ICON,
-        width: CONFIG.styles.earthquakes.icon.width,
-        height: CONFIG.styles.earthquakes.icon.height,
-        anchorY: CONFIG.styles.earthquakes.icon.anchorY,
-        anchorX: CONFIG.styles.earthquakes.icon.anchorX,
-      }),
-      getSize: (d: USGSEarthquakeFeature) => getMagnitudeSize(d.properties.mag) * 
-        (CONFIG.styles.earthquakes.magnitudeScaling.baseMultiplier + 
-         d.properties.mag * CONFIG.styles.earthquakes.magnitudeScaling.magnitudeWeight) * 
-        CONFIG.styles.earthquakes.sizeMultiplier,
-      sizeScale: CONFIG.styles.earthquakes.iconDisplay.sizeScale,
-      sizeUnits: 'pixels',
+      getRadius: (d: USGSEarthquakeFeature) => getEarthquakeRadius(d.properties.mag) * 2,
+      radiusUnits: 'pixels',
+      filled: true,
+      getFillColor: [0, 0, 0, 0],
       pickable: true,
-      autoHighlight: false,
-      alphaCutoff: CONFIG.styles.earthquakes.iconDisplay.alphaCutoff, // Include ALL pixels (including transparent) for picking
-      updateTriggers: {
-        getPosition: currentTime.getTime(),
-        getSize: currentTime.getTime(),
-      },
     }));
-
   }
 
   return layers;

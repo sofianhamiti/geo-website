@@ -237,7 +237,7 @@ export const CONFIG = {
       errorBackgroundPadding: [8, 4, 8, 4] as [number, number, number, number],
 
       // Filtering options
-      minMagnitudeDisplay: 0.0, // Show all earthquakes by default
+      minMagnitudeDisplay: 4.0, // Show M4.0+ earthquakes
       maxAge: 24, // Hours - matches API endpoint
 
       // Performance settings

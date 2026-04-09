@@ -101,7 +101,7 @@ export const useDataManagers = (
   useEffect(() => {
     if (state.showEarthquakes && state.earthquakeManager) {
       try {
-        const layers = createEarthquakeLayers(currentTime, currentZoom);
+        const layers = createEarthquakeLayers(currentTime, currentZoom, 0);
         actions.setEarthquakeLayers(layers);
         actions.setEarthquakeLastUpdate(new Date());
       } catch (error) {

@@ -4,6 +4,7 @@ import { useMapStore } from '../store/mapStore';
 import { useMapInstance } from '../hooks/useMapInstance';
 import { useDataManagers } from '../hooks/useDataManagers';
 import { useMapLayers } from '../hooks/useMapLayers';
+import { useAnimationLoop } from '../hooks/useAnimationLoop';
 import { MapControlPanel } from './MapControlPanel';
 import ISSVideoOverlay from './ISSVideoOverlay';
 
@@ -153,6 +154,9 @@ const Map: React.FC = () => {
     currentZoom,
     cities
   );
+
+  // Animation loop for pulsing earthquake markers (runs at 60fps via rAF)
+  useAnimationLoop();
 
   // Load saved cities on mount
   useEffect(() => {

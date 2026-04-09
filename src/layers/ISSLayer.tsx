@@ -239,9 +239,12 @@ export function createISSLayers(currentTime: Date, onISSClick?: (info: any) => v
       sizeScale: 1,
       sizeUnits: 'pixels',
       pickable: true,
-      autoHighlight: false, // Disable hover shadow effects
-      alphaCutoff: -1, // Include ALL pixels (including transparent) for picking
-      onClick: onISSClick, // Handle clicks for video overlay
+      autoHighlight: false,
+      alphaCutoff: -1,
+      onClick: onISSClick,
+      transitions: {
+        getPosition: { duration: 2000, type: 'interpolation' },
+      },
       updateTriggers: {
         getPosition: currentTime.getTime(),
       },
