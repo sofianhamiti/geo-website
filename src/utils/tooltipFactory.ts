@@ -418,21 +418,9 @@ export function createLayerTooltip(object: any, layer: any) {
     case 'hurricane-positions':
       return createHurricaneTooltip(object, layer.id);
     
-    case 'hurricane-historical-positions':
-      return createHurricaneTooltip(object, layer.id);
-    
-    case 'hurricane-forecast-positions':
-      return createHurricaneTooltip(object, layer.id);
-    
     case 'hurricane-ssnum-forecast-dots':
       return createHurricaneTooltip(object, layer.id);
-    
-    case 'hurricane-tracks':
-      return createHurricaneObservedTrackTooltip(object);
-    
-    case 'hurricane-ssnum-trajectories':
-      return createHurricaneForecastTrackTooltip(object);
-    
+
     case 'hurricane-cones':
       return createHurricaneConeTooltip(object);
     

@@ -78,7 +78,7 @@ export const useDataManagers = (
   useEffect(() => {
     if (state.showHurricanes && state.hurricaneManager) {
       try {
-        const layers = createHurricaneLayers();
+        const layers = createHurricaneLayers(0);
         actions.setHurricaneLayers(layers);
         actions.setHurricaneLastUpdate(new Date());
       } catch (error) {

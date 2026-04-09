@@ -3,30 +3,12 @@ import type { Layer } from '@deck.gl/core';
 import { CONFIG } from '../config';
 import { hurricaneDataManager } from '../services/HurricaneDataManager';
 import { safeSyncOperation } from '../utils/errorHandler';
-import { getCategoryColor, getIconFactory, getStormSize } from '../utils/IconFactory';
-import { HurricaneProcessor } from '../utils/HurricaneProcessor';
-import type { 
-  TrajectoryFeature, 
-  ProcessedStorm, 
-  ColoredTrackSegment,
-  HurricaneLayerData 
+import { getCategoryColor } from '../utils/IconFactory';
+import type {
+  TrajectoryFeature,
+  ProcessedStorm,
+  HurricaneLayerData
 } from '../types/hurricane';
-
-// Create processor instance for wind speed conversion
-const hurricaneProcessor = new HurricaneProcessor();
-
-/**
- * Interface for trajectory segment colored by SSNUM
- */
-interface SSNUMTrajectorySegment {
-  path: [number, number][];
-  color: [number, number, number, number];
-  category: number;
-  stormName: string;
-  stormId: string;
-  fromHour: number;
-  toHour: number;
-}
 
 
 /**
@@ -83,252 +65,104 @@ function createConeLayer(trajectories: readonly TrajectoryFeature[]): Layer | nu
   );
 }
 
-/**
- * Create hurricane track segments layer
- */
-function createTrackLayer(processedStorms: readonly ProcessedStorm[]): Layer | null {
-  return safeSyncOperation(
-    () => {
-      if (!processedStorms || processedStorms.length === 0) {
-        return null;
-      }
 
-      const allTrackSegments = processedStorms.flatMap(storm => storm.coloredTrackSegments);
-      
-      if (allTrackSegments.length === 0) {
-        return null;
-      }
+const CYCLONE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="128" height="128"><path fill="COLOR" d="M22.6521,4.1821l-2.177,2.5142L19.0713,8.3174,20.7864,9.605A7.9361,7.9361,0,0,1,23.9963,16l.0008.0576.0017.0415c.018.4317.2412,10.1113-14.6538,11.7222l2.18-2.5176,1.4039-1.6211L11.2139,22.395A7.9361,7.9361,0,0,1,8.0037,16l-.0008-.0576-.0017-.0415C7.9832,15.47,7.7605,5.8071,22.6521,4.1821M24.9978,2c-.0164,0-.0327,0-.0493.001C5.2532,2.9146,6.0037,16,6.0037,16a9.975,9.975,0,0,0,4.0095,7.9946L6.2368,28.3555A1.0044,1.0044,0,0,0,7.0022,30c.0164,0,.0327,0,.0493-.001C26.7468,29.0854,25.9963,16,25.9963,16a9.9756,9.9756,0,0,0-4.0092-7.9946l3.7761-4.3609A1.0044,1.0044,0,0,0,24.9978,2Z"/></svg>`;
 
-      return new PathLayer({
-        id: 'hurricane-tracks', // Standard ID for tooltip factory
-        data: allTrackSegments,
-        getPath: (d: ColoredTrackSegment) => d.path as any,
-        getColor: (d: ColoredTrackSegment) => d.color as any,
-        getWidth: (d: ColoredTrackSegment) => {
-          return d.segmentType === 'historical' 
-            ? CONFIG.weather.hurricanes.visualParams.historicalTrackWidth 
-            : CONFIG.weather.hurricanes.visualParams.forecastTrackWidth;
-        },
-        widthUnits: 'pixels',
-        capRounded: true,
-        jointRounded: true,
-        pickable: false, // No tooltips on track segments
-      });
-    },
-    'create hurricane track layer',
-    null
-  );
+function buildCycloneIcon(category: number): string {
+  const color = getCategoryColor(category);
+  const hex = `#${color[0].toString(16).padStart(2, '0')}${color[1].toString(16).padStart(2, '0')}${color[2].toString(16).padStart(2, '0')}`;
+  return `data:image/svg+xml;base64,${btoa(CYCLONE_SVG.replace('COLOR', hex))}`;
+}
+
+// Pre-build icons for categories 0-5
+const CYCLONE_ICONS: Record<number, string> = {};
+for (let cat = 0; cat <= 5; cat++) {
+  CYCLONE_ICONS[cat] = buildCycloneIcon(cat);
+}
+
+function getHurricaneSize(category: number): number {
+  // TS=28px, Cat1=34px, Cat2=40px, Cat3=48px, Cat4=56px, Cat5=66px
+  return 28 + category * 7.5;
 }
 
 /**
- * Create SSNUM trajectory segments from forecast positions
+ * Create rotating cyclone icon for current hurricane positions
  */
-function createSSNUMTrajectorySegments(ssnumPositions: any[]): SSNUMTrajectorySegment[] {
-  if (!ssnumPositions || ssnumPositions.length === 0) {
-    return [];
-  }
+function createCurrentPositionLayers(processedStorms: readonly ProcessedStorm[], rotationAngle: number): Layer[] {
+  const layers: Layer[] = [];
 
-  // Group ALL positions by storm (including TAU=0 current positions)
-  const stormPositions = new Map<string, any[]>();
-  
-  for (const position of ssnumPositions) {
-    const attrs = position.attributes;
-    const stormId = attrs.STORMID || 'unknown';
-    
-    if (attrs.TAU !== null && attrs.TAU !== undefined && attrs.LAT && attrs.LON) {
-      if (!stormPositions.has(stormId)) {
-        stormPositions.set(stormId, []);
-      }
-      stormPositions.get(stormId)!.push(position);
+  if (!processedStorms || processedStorms.length === 0) return layers;
+
+  const currentPositions = processedStorms
+    .filter(storm => storm.current)
+    .map(storm => ({ ...storm.current!, stormName: storm.stormName, currentCategory: storm.currentCategory }));
+
+  if (currentPositions.length === 0) return layers;
+
+  // Rotating cyclone icon
+  layers.push(new IconLayer({
+    id: 'hurricane-positions',
+    data: currentPositions,
+    getPosition: (d: any) => [d.geometry.x, d.geometry.y],
+    getIcon: (d: any) => {
+      const cat = Math.max(0, Math.min(5, d.attributes.SS || 0));
+      return {
+        url: CYCLONE_ICONS[cat],
+        width: 128,
+        height: 128,
+        anchorX: 64,
+        anchorY: 64,
+      };
+    },
+    getSize: (d: any) => getHurricaneSize(d.attributes.SS || 0),
+    getAngle: rotationAngle,
+    sizeUnits: 'pixels',
+    pickable: true,
+    alphaCutoff: -1,
+  }));
+
+  return layers;
+}
+
+/**
+ * Create per-storm trajectory paths — one PathLayer per storm to prevent cross-storm links
+ */
+function createStormTrackLayers(processedStorms: readonly ProcessedStorm[]): Layer[] {
+  const layers: Layer[] = [];
+  if (!processedStorms || processedStorms.length === 0) return layers;
+
+  for (const storm of processedStorms) {
+    // Build full path: historical positions → current → forecast
+    const path: [number, number][] = [];
+
+    for (const pos of storm.historical) {
+      path.push([pos.geometry.x, pos.geometry.y]);
     }
-  }
-
-  const segments: SSNUMTrajectorySegment[] = [];
-
-  for (const [stormId, positions] of stormPositions.entries()) {
-    if (positions.length < 2) continue;
-
-    positions.sort((a, b) => (a.attributes.TAU || 0) - (b.attributes.TAU || 0));
-    const stormName = positions[0].attributes.STORMNAME || 'Unknown Storm';
-
-    for (let i = 0; i < positions.length - 1; i++) {
-      const currentPos = positions[i];
-      const nextPos = positions[i + 1];
-      
-      const currentAttrs = currentPos.attributes;
-      const nextAttrs = nextPos.attributes;
-
-      const category = nextAttrs.SSNUM || currentAttrs.SSNUM || 0;
-      const color = getCategoryColor(category);
-
-      const path: [number, number][] = [
-        [currentAttrs.LON, currentAttrs.LAT],
-        [nextAttrs.LON, nextAttrs.LAT]
-      ];
-
-      segments.push({
-        path,
-        color: [color[0], color[1], color[2], 200] as [number, number, number, number],
-        category,
-        stormName,
-        stormId,
-        fromHour: currentAttrs.TAU || 0,
-        toHour: nextAttrs.TAU || 0
-      });
+    if (storm.current) {
+      path.push([storm.current.geometry.x, storm.current.geometry.y]);
     }
+    for (const pos of storm.forecast) {
+      path.push([pos.geometry.x, pos.geometry.y]);
+    }
+
+    if (path.length < 2) continue;
+
+    const color = getCategoryColor(storm.currentCategory);
+
+    layers.push(new PathLayer({
+      id: `hurricane-track-${storm.stormId}`,
+      data: [{ path }],
+      getPath: (d: any) => d.path,
+      getColor: [color[0], color[1], color[2], 180],
+      getWidth: 2,
+      widthUnits: 'pixels',
+      capRounded: true,
+      jointRounded: true,
+      pickable: false,
+    }));
   }
 
-  return segments;
-}
-
-/**
- * Create SSNUM trajectory layer
- */
-function createSSNUMTrajectoryLayer(ssnumForecastPositions: any[]): Layer | null {
-  return safeSyncOperation(
-    () => {
-      const trajectorySegments = createSSNUMTrajectorySegments(ssnumForecastPositions);
-      
-      if (trajectorySegments.length === 0) {
-        return null;
-      }
-
-      return new PathLayer({
-        id: 'hurricane-ssnum-trajectories', // Standard ID for tooltip factory
-        data: trajectorySegments,
-        getPath: (d: SSNUMTrajectorySegment) => d.path,
-        getColor: (d: SSNUMTrajectorySegment) => d.color,
-        getWidth: CONFIG.weather.hurricanes.visualParams.forecastTrackWidth + 1,
-        widthUnits: 'pixels',
-        capRounded: true,
-        jointRounded: true,
-        pickable: false, // No tooltips on SSNUM trajectory lines
-      });
-    },
-    'create SSNUM trajectory layer',
-    null
-  );
-}
-
-/**
- * Create historical position dots layer
- */
-function createHistoricalPositionLayer(processedStorms: readonly ProcessedStorm[]): Layer | null {
-  return safeSyncOperation(
-    () => {
-      if (!processedStorms || processedStorms.length === 0) {
-        return null;
-      }
-
-      const historicalPositions = processedStorms.flatMap(storm => 
-        storm.historical.map(pos => ({...pos, stormName: storm.stormName, currentCategory: storm.currentCategory}))
-      );
-      
-      if (historicalPositions.length === 0) {
-        return null;
-      }
-
-      return new ScatterplotLayer({
-        id: 'hurricane-historical-positions', // Standard ID for tooltip factory
-        data: historicalPositions,
-        getPosition: (d: any) => [d.geometry.x, d.geometry.y],
-        getRadius: CONFIG.weather.hurricanes.visualParams.historicalDotRadius,
-        getFillColor: (d: any) => {
-          const color = getCategoryColor(d.attributes.SS || 0);
-          return [color[0], color[1], color[2], 255];
-        },
-        getLineColor: CONFIG.weather.hurricanes.visualParams.historicalDotStroke,
-        getLineWidth: 1,
-        lineWidthUnits: 'pixels',
-        radiusUnits: 'pixels',
-        pickable: true,
-        // NO getTooltip - let factory handle it
-      });
-    },
-    'create hurricane historical position layer',
-    null
-  );
-}
-
-/**
- * Create current position icons layer
- */
-function createCurrentPositionLayer(processedStorms: readonly ProcessedStorm[]): Layer | null {
-  return safeSyncOperation(
-    () => {
-      if (!processedStorms || processedStorms.length === 0) {
-        return null;
-      }
-
-      const currentPositions = processedStorms
-        .filter(storm => storm.current)
-        .map(storm => ({...storm.current!, stormName: storm.stormName, currentCategory: storm.currentCategory}));
-      
-      if (currentPositions.length === 0) {
-        return null;
-      }
-
-      return new IconLayer({
-        id: 'hurricane-positions', // Standard ID for tooltip factory (matches existing factory)
-        data: currentPositions,
-        getPosition: (d: any) => [d.geometry.x, d.geometry.y],
-        getIcon: (d: any) => {
-          const iconFactory = getIconFactory();
-          return iconFactory.getIconConfig('current', d.attributes.SS || 0);
-        },
-        getSize: (d: any) => getStormSize(d.attributes.SS || 0, true),
-        sizeUnits: 'pixels',
-        pickable: true,
-        // NO getTooltip - let factory handle it
-      });
-    },
-    'create hurricane current position layer',
-    null
-  );
-}
-
-/**
- * Create forecast position dots layer
- */
-function createForecastPositionLayer(processedStorms: readonly ProcessedStorm[]): Layer | null {
-  return safeSyncOperation(
-    () => {
-      if (!processedStorms || processedStorms.length === 0) {
-        return null;
-      }
-
-      const forecastPositions = processedStorms.flatMap(storm => 
-        storm.forecast.map(pos => ({...pos, stormName: storm.stormName, currentCategory: storm.currentCategory}))
-      );
-      
-      if (forecastPositions.length === 0) {
-        return null;
-      }
-
-      return new ScatterplotLayer({
-        id: 'hurricane-forecast-positions', // Standard ID for tooltip factory
-        data: forecastPositions,
-        getPosition: (d: any) => [d.geometry.x, d.geometry.y],
-        getRadius: CONFIG.weather.hurricanes.visualParams.forecastDotRadius,
-        getFillColor: (d: any) => {
-          const windSpeed = d.attributes.INTENSITY || 0;
-          const predictedCategory = windSpeed > 0 
-            ? hurricaneProcessor.windSpeedToCategory(windSpeed)  
-            : (d.attributes.SS || 0);
-          const color = getCategoryColor(predictedCategory);
-          return [color[0], color[1], color[2], 220];
-        },
-        getLineColor: CONFIG.weather.hurricanes.visualParams.forecastDotStroke,
-        getLineWidth: 1,
-        lineWidthUnits: 'pixels',
-        radiusUnits: 'pixels',
-        pickable: true,
-        // NO getTooltip - let factory handle it
-      });
-    },
-    'create hurricane forecast position layer',
-    null
-  );
+  return layers;
 }
 
 /**
@@ -371,14 +205,7 @@ function createSSNUMForecastDotsLayer(ssnumForecastPositions: any[]): Layer | nu
   );
 }
 
-/**
- * Create hurricane visualization layers - CONSOLIDATED SINGLE FUNCTION
- * 
- * This replaces the scattered approach of 6 separate files with one
- * cohesive function that creates all hurricane layers following the
- * same pattern as EarthquakeLayer and PlanesLayer.
- */
-export function createHurricaneLayers(): Layer[] {
+export function createHurricaneLayers(rotationAngle: number = 0): Layer[] {
   // Get data from the centralized data manager
   const data = hurricaneDataManager.getData() as HurricaneLayerData;
 
@@ -394,29 +221,15 @@ export function createHurricaneLayers(): Layer[] {
   const coneLayer = createConeLayer(data.trajectories || []);
   if (coneLayer) layers.push(coneLayer);
 
-  // 2. Track segments (middle layer)
-  const trackLayer = createTrackLayer(data.processedStorms || []);
-  if (trackLayer) layers.push(trackLayer);
+  // 2. Per-storm trajectory paths (one PathLayer per storm — no cross-storm links)
+  layers.push(...createStormTrackLayers(data.processedStorms || []));
 
-  // 3. SSNUM trajectory paths
-  const ssnumTrajectoryLayer = createSSNUMTrajectoryLayer((data as any).ssnumForecastPositions || []);
-  if (ssnumTrajectoryLayer) layers.push(ssnumTrajectoryLayer);
-
-  // 4. Historical position dots
-  const historicalLayer = createHistoricalPositionLayer(data.processedStorms || []);
-  if (historicalLayer) layers.push(historicalLayer);
-
-  // 5. Forecast position dots  
-  const forecastLayer = createForecastPositionLayer(data.processedStorms || []);
-  if (forecastLayer) layers.push(forecastLayer);
-
-  // 6. SSNUM forecast dots
+  // 3. SSNUM forecast dots
   const ssnumDotsLayer = createSSNUMForecastDotsLayer((data as any).ssnumForecastPositions || []);
   if (ssnumDotsLayer) layers.push(ssnumDotsLayer);
 
-  // 7. Current position icons (on top for best visibility)
-  const currentLayer = createCurrentPositionLayer(data.processedStorms || []);
-  if (currentLayer) layers.push(currentLayer);
+  // 4. Current position — rotating cyclone icon (on top)
+  layers.push(...createCurrentPositionLayers(data.processedStorms || [], rotationAngle));
 
   return layers;
 }
