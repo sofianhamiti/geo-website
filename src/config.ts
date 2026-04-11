@@ -30,11 +30,19 @@ export const CONFIG = {
 
   // Styling
   styles: {
-    terminator: {
-      color: '#FF6B35', // Sunset orange - warmer and more sophisticated
-      width: 2,
-      opacity: 0.9,
-      resolution: 360, // High resolution for smooth line
+    night: {
+      // Tile source — NASA GIBS VIIRS Black Marble (free, no API key)
+      tileUrl:
+        'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
+      maxZoom: 8,
+      tileOpacity: 0.85,
+
+      // Shadow overlay color (dark blue-black)
+      shadowColor: [5, 5, 25, 255] as [number, number, number, number],
+
+      // Terminator line
+      terminatorColor: [180, 200, 255, 180] as [number, number, number, number],
+      terminatorWidth: 1,
     },
     arcgisPlaces: {
       opacity: 1,
@@ -87,6 +95,12 @@ export const CONFIG = {
       spacingOffset: 0.2, // Vertical spacing between symbol and label
     },
     iss: {
+      // Livestream Configuration
+      streams: [
+        { id: 'zPH5KtjJFaQ', label: 'HD Views' },
+        { id: 'sWasdbDVNvc', label: 'Live Video' },
+      ],
+
       // API Configuration
       satelliteId: 25544, // ISS NORAD ID
       apiBaseUrl: 'https://api.wheretheiss.at/v1/satellites/',
@@ -237,66 +251,12 @@ export const CONFIG = {
       errorBackgroundPadding: [8, 4, 8, 4] as [number, number, number, number],
 
       // Filtering options
-      minMagnitudeDisplay: 4.0, // Show M4.0+ earthquakes
+      minMagnitudeDisplay: 4.5, // Show M4.5+ earthquakes
       maxAge: 24, // Hours - matches API endpoint
 
       // Performance settings
       maxEarthquakes: 1000, // Limit for performance
       significantThreshold: 4.5, // M4.5+ considered significant
-    },
-    planes: {
-      // API Configuration
-      apiBaseUrl: 'https://opensky-network.org/api',
-      endpoint: '/states/all',
-      updateIntervalMs: 10 * 60 * 1000, // 10 minutes - optimized for API limits (144 calls/day)
-
-      // OAuth2 Configuration
-      oauth2: {
-        tokenEndpoint: 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token',
-        tokenCacheExpirationMs: 25 * 60 * 1000, // 25 minutes (refresh before 30min expiry)
-        grantType: 'client_credentials',
-      },
-
-      // API Credit Management - Based on geographic area, not just API calls
-      apiLimits: {
-        creditsPerDay: 4000,        // 4000 credits/day with OAuth2 (8000 if contributing data)
-        creditsPerCall: 4,          // 4 credits for global bounds (>400 sq deg area)
-        maxCallsPerDay: 1000,       // 1000 calls max at 4 credits each
-        actualUsage: 144,           // 144 calls/day at 10min intervals  
-        dailyCreditsUsed: 576,      // 144 calls × 4 credits = 576 credits (14.4% of limit)
-        recommendedInterval: 10,    // 10 minutes = 144 calls/day = 576 credits
-        conservativeInterval: 15,   // 15 minutes = 96 calls/day = 384 credits  
-      },
-
-      // Icon Configuration
-      icon: {
-        svgData: `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24"><path fill="#FFD700" d="M14 8.947L22 14v2l-8-2.526v5.36l3 1.666V22l-4.5-1L8 22v-1.5l3-1.667v-5.36L3 16v-2l8-5.053V3.5a1.5 1.5 0 0 1 3 0z"/></svg>`,
-        width: 96,
-        height: 96,
-        anchorX: 48,
-        anchorY: 48,
-      },
-
-      // Visual styling
-      iconSize: 16, // Base aircraft icon size
-      iconSizeMultiplier: 1.2, // Size scaling factor
-
-
-
-      // Geographic bounds optimization
-      boundsPadding: 2, // Degrees to extend bounds for API calls
-
-      // Error display styling
-      errorTextSize: 16,
-      errorTextColor: [100, 149, 237, 255] as [number, number, number, number], // Light blue
-      errorBackgroundColor: [15, 23, 42, 204] as [number, number, number, number],
-      errorBackgroundPadding: [8, 4, 8, 4] as [number, number, number, number],
-
-      // Tooltip styling
-      tooltipSize: 12,
-      tooltipColor: [255, 255, 255, 255] as [number, number, number, number],
-      tooltipBackgroundColor: [15, 23, 42, 220] as [number, number, number, number],
-      tooltipBorderColor: [100, 149, 237, 80] as [number, number, number, number],
     },
     timezones: {
       // Local data configuration (primary)
@@ -355,15 +315,19 @@ export const CONFIG = {
   // Weather settings
   weather: {
     hurricanes: {
-      // API Configuration
-      serviceUrl: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Active_Hurricanes_v1/FeatureServer',
+      // API Configuration — hurricane_aware_aggregated_data (global: NHC + JTWC)
+      serviceUrl: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/hurricane_aware_aggregated_data/FeatureServer',
       refreshIntervalMinutes: 60, // 1 hour
 
-      // API Layer Configuration
-      apiLayers: {
-        positions: 1,      // Hurricane position data (current, historical, forecast)
-        tracks: 2,         // Forecast track centerlines
-        trajectories: [0, 3, 4, 5], // Trajectory uncertainty cones (try multiple layers)
+      // Fallback API — Active_Hurricanes_v1 (has full historical track when available)
+      fallbackServiceUrl: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/Active_Hurricanes_v1/FeatureServer',
+      fallbackPositionsLayer: 1,
+
+      // API Table Configuration (tables, not spatial layers — geometry constructed client-side from LAT/LON)
+      apiTables: {
+        observedPositions: 1,  // Current observed position per storm
+        forecast: 2,           // Forecast positions with SSNUM categories
+        storms: 3,             // Active storm list
       },
 
       // Zoom.Earth Style Color Palette - professional subtle visualization matching their ACTUAL fucking implementation
@@ -432,7 +396,6 @@ export const CONFIG = {
     arcgisSatellite: 'arcgis-satellite-layer',
     eoxSentinel: 'eox-sentinel-layer',
     arcgisPlaces: 'arcgis-places-layer',
-    terminator: 'deck-gl-terminator',
     cities: 'deck-gl-cities',
     mountains: 'deck-gl-mountains',
     iss: 'deck-gl-iss',
@@ -443,8 +406,6 @@ export const CONFIG = {
     earthquakePositions: 'earthquake-positions',
     earthquakeLabels: 'earthquake-labels',
     timezones: 'deck-gl-timezones',
-    planes: 'deck-gl-planes',
-    planePositions: 'plane-positions',
   },
 
   sourceIds: {

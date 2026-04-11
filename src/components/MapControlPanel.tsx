@@ -1,10 +1,21 @@
 /**
- * Map Control Panel - Extracted from Map.tsx to reduce component size
- * Handles all the UI controls for layers, basemaps, and settings
+ * Map Control Panel — Tabbed layout with shadcn/ui components
+ * Tabs: Map | Day & Night | Live Feeds
+ *
+ * Sizing uses a golden-ratio scale (φ = 1.618):
+ *   8 → 13 → 21 → 34 → 55 px
  */
 
 import React from 'react';
+import {
+  Globe, SunMoon, Radio, MapPin, Clock4, Mountain, Star,
+  Building2, Activity, Wind, X, RefreshCw,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { CityManager } from './CityManager';
+import { type NightStyleKey } from '../layers/NightLayer';
 
 interface MapControlPanelProps {
   isMenuOpen: boolean;
@@ -18,14 +29,12 @@ interface MapControlPanelProps {
   showISS: boolean;
   showEarthquakes: boolean;
   showHurricanes: boolean;
-  showPlanes: boolean;
   isISSLoading: boolean;
   isEarthquakesLoading: boolean;
   isHurricanesLoading: boolean;
-  isPlanesLoading: boolean;
   earthquakeLastUpdate: Date | null;
   hurricaneLastUpdate: Date | null;
-  planeLastUpdate: Date | null;
+  hurricaneLayerCount: number;
   currentTime: Date;
   onToggleMenu: () => void;
   onSetSelectedBasemap: (basemap: 'usgs' | 'arcgis' | 'eox') => void;
@@ -38,54 +47,74 @@ interface MapControlPanelProps {
   onToggleISS: () => void;
   onToggleEarthquakes: () => void;
   onToggleHurricanes: () => void;
-  onTogglePlanes: () => void;
+  nightStyle: NightStyleKey;
+  onSetNightStyle: (style: NightStyleKey) => void;
+  isGlobe: boolean;
+  onToggleProjection: () => void;
 }
 
-const ToggleSwitch: React.FC<{ enabled: boolean; onClick: () => void; disabled?: boolean }> = ({ 
-  enabled, 
-  onClick, 
-  disabled = false 
-}) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-      enabled ? 'bg-blue-600' : 'bg-gray-600'
-    } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-  >
-    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-      enabled ? 'translate-x-6' : 'translate-x-1'
-    }`} />
-  </button>
+/* ── Reusable small components ──────────────────────────────── */
+
+const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="px-1 pb-1">
+    <span className="text-[11px] font-semibold tracking-widest text-blue-500/50 uppercase">
+      {children}
+    </span>
+  </div>
 );
 
-const LayerControl: React.FC<{
-  title: string;
-  subtitle: string;
+const LayerRow: React.FC<{
   icon: React.ReactNode;
+  name: string;
   enabled: boolean;
   loading?: boolean;
   disabled?: boolean;
+  meta?: string;
   onToggle: () => void;
-}> = ({ title, subtitle, icon, enabled, loading = false, disabled = false, onToggle }) => (
-  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all duration-200">
-    <div className="flex items-center space-x-3">
-      <div className="w-5 h-5 flex items-center justify-center">
-        {icon}
-      </div>
-      <div>
-        <div className="text-blue-100 font-medium">{title}</div>
-        <div className="text-blue-300 text-xs">{subtitle}</div>
-      </div>
-    </div>
-    <div className="flex items-center space-x-2">
-      {loading && (
-        <div className="w-4 h-4 border-2 border-blue-300 border-t-transparent rounded-full animate-spin"></div>
+}> = ({ icon, name, enabled, loading = false, disabled = false, meta, onToggle }) => (
+  <div className="flex items-center justify-between py-3 px-4 rounded-lg hover:bg-slate-800/50 transition-colors">
+    <div className="flex items-center gap-3">
+      <span className="w-5 h-5 flex items-center justify-center">{icon}</span>
+      <span className="text-[15px] font-medium text-blue-100">{name}</span>
+      {meta && (
+        <span className="text-[10px] text-teal-300/30">{meta}</span>
       )}
-      <ToggleSwitch enabled={enabled} onClick={onToggle} disabled={disabled || loading} />
+      {loading && (
+        <div className="w-4 h-4 border-2 border-blue-300 border-t-transparent rounded-full animate-spin" />
+      )}
     </div>
+    <Switch
+      checked={enabled}
+      onCheckedChange={onToggle}
+      disabled={disabled || loading}
+    />
   </div>
 );
+
+const UpdateMeta: React.FC<{ freq: string; lastUpdate?: Date | null; source?: string }> = ({
+  freq, lastUpdate, source
+}) => (
+  <div className="flex items-center gap-2 pl-12 pb-1">
+    <RefreshCw className="w-3 h-3 text-teal-300/30" />
+    <span className="text-[11px] text-teal-300/30">{freq}</span>
+    {lastUpdate && (
+      <>
+        <span className="text-[11px] text-slate-600/50">·</span>
+        <span className="text-[11px] text-slate-600/50">
+          {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </>
+    )}
+    {source && (
+      <>
+        <span className="text-[11px] text-slate-600/50">·</span>
+        <span className="text-[11px] text-slate-600/50">{source}</span>
+      </>
+    )}
+  </div>
+);
+
+/* ── Main Panel ─────────────────────────────────────────────── */
 
 export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   isMenuOpen,
@@ -99,14 +128,12 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   showISS,
   showEarthquakes,
   showHurricanes,
-  showPlanes,
   isISSLoading,
   isEarthquakesLoading,
   isHurricanesLoading,
-  isPlanesLoading,
   earthquakeLastUpdate,
   hurricaneLastUpdate,
-  planeLastUpdate,
+  hurricaneLayerCount,
   currentTime,
   onToggleMenu,
   onSetSelectedBasemap,
@@ -119,24 +146,33 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   onToggleISS,
   onToggleEarthquakes,
   onToggleHurricanes,
-  onTogglePlanes,
+  nightStyle,
+  onSetNightStyle,
+  isGlobe,
+  onToggleProjection,
 }) => {
+  const basemaps: { key: 'usgs' | 'arcgis' | 'eox'; name: string; icon: React.ReactNode }[] = [
+    { key: 'eox', name: 'Sentinel-2 Cloudless', icon: <Star className="w-5 h-5 text-amber-400" /> },
+    { key: 'usgs', name: 'Blue Marble', icon: <Globe className="w-5 h-5 text-blue-400" /> },
+    { key: 'arcgis', name: 'Satellite Imagery', icon: <Globe className="w-5 h-5 text-green-400" /> },
+  ];
+
+  const nightStyles: { key: NightStyleKey; label: string }[] = [
+    { key: 'off', label: 'Off' },
+    { key: 'shadow', label: 'Shadow' },
+    { key: 'masked', label: 'Earth at Night' },
+  ];
+
   return (
     <>
       {/* Menu Toggle Button */}
-      <div className="absolute top-3 right-3 z-50">
+      <div className="absolute top-4 right-4 z-50">
         <button
           onClick={onToggleMenu}
-          className="p-2 bg-slate-800/90 backdrop-blur-sm border border-blue-200/20 rounded-lg text-blue-100 hover:bg-slate-700/90 hover:text-white transition-all duration-200 shadow-lg"
+          className="p-2.5 bg-slate-800/90 backdrop-blur-sm border border-blue-200/20 rounded-lg text-blue-100 hover:bg-slate-700/90 hover:text-white transition-all duration-200 shadow-lg"
           title="Toggle Controls Panel"
         >
-          <svg 
-            width="14" 
-            height="14" 
-            viewBox="0 0 24 24" 
-            fill="currentColor" 
-            className="transition-transform duration-200"
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="transition-transform duration-200">
             {isMenuOpen ? (
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
             ) : (
@@ -146,260 +182,175 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
         </button>
       </div>
 
-      {/* Right Slide Panel */}
-      <div className={`fixed top-0 right-0 h-full w-80 bg-slate-900/95 backdrop-blur-lg border-l border-blue-200/20 shadow-2xl z-40 transform transition-transform duration-200 ease-out flex flex-col ${
+      {/* Right Slide Panel — 520px ≈ 34 × φ² */}
+      <div className={`fixed top-0 right-0 h-full w-[520px] bg-slate-900/95 backdrop-blur-lg border-l border-blue-200/20 shadow-2xl z-40 transform transition-transform duration-200 ease-out flex flex-col ${
         isMenuOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
-        {/* Panel Header */}
-        <div className="p-6 border-b border-blue-200/10 flex-shrink-0">
+        {/* Header — 34px vertical padding */}
+        <div className="flex items-center justify-between px-8 py-6 shrink-0">
           <h2 className="text-lg font-semibold text-blue-100">Map Controls</h2>
+          <button
+            onClick={onToggleMenu}
+            className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
+          >
+            <X className="w-4 h-4 text-slate-400" />
+          </button>
         </div>
 
-        {/* Panel Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-6">
-          
-            {/* Basemap Section */}
-            <div>
-              <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Basemap</h3>
-              <div className="space-y-3">
-                
-                {/* EOX Sentinel-2 Cloudless - Now First (Default) */}
-                <div 
-                  onClick={() => onSetSelectedBasemap('eox')}
-                  className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedBasemap === 'eox' 
-                      ? 'bg-blue-600/30 border border-blue-400/50' 
-                      : 'bg-slate-800/50 hover:bg-slate-800/70'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-blue-100 font-medium">Sentinel-2 Cloudless</div>
-                      <div className="text-blue-300 text-xs">EOX 10m Resolution</div>
-                    </div>
+        {/* Tabbed Content */}
+        <Tabs defaultValue="map" className="flex flex-col flex-1 min-h-0">
+          <TabsList>
+            <TabsTrigger value="map">
+              <Globe className="w-5 h-5" />
+              Map
+            </TabsTrigger>
+            <TabsTrigger value="daynight">
+              <SunMoon className="w-5 h-5" />
+              Day & Night
+            </TabsTrigger>
+            <TabsTrigger value="live">
+              <Radio className="w-5 h-5" />
+              Live Feeds
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="border-t border-blue-200/10" />
+
+          {/* ── Map Tab ──────────────────────────────── */}
+          <TabsContent value="map" className="flex-1">
+            <ScrollArea className="h-full">
+              <div className="p-8 space-y-8">
+                {/* Projection */}
+                <div className="space-y-1">
+                  <SectionLabel>Projection</SectionLabel>
+                  <LayerRow icon={<Globe className="w-[18px] h-[18px] text-teal-400" />} name="3D Globe" enabled={isGlobe} onToggle={onToggleProjection} />
+                </div>
+
+                {/* Basemap */}
+                <div className="space-y-3">
+                  <SectionLabel>Basemap</SectionLabel>
+                  <div className="space-y-2">
+                    {basemaps.map(bm => (
+                      <div
+                        key={bm.key}
+                        onClick={() => onSetSelectedBasemap(bm.key)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all ${
+                          selectedBasemap === bm.key
+                            ? 'bg-blue-600/20 border border-blue-400/50'
+                            : 'bg-slate-800/30 hover:bg-slate-800/60 border border-transparent'
+                        }`}
+                      >
+                        {bm.icon}
+                        <span className={`text-[15px] font-medium ${
+                          selectedBasemap === bm.key ? 'text-blue-100' : 'text-slate-400'
+                        }`}>
+                          {bm.name}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  {selectedBasemap === 'eox' && (
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
-                    </div>
-                  )}
                 </div>
 
-                {/* USGS Blue Marble */}
-                <div 
-                  onClick={() => onSetSelectedBasemap('usgs')}
-                  className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedBasemap === 'usgs' 
-                      ? 'bg-blue-600/30 border border-blue-400/50' 
-                      : 'bg-slate-800/50 hover:bg-slate-800/70'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                      </svg>
+                {/* Overlays */}
+                <div className="space-y-1">
+                  <SectionLabel>Overlays</SectionLabel>
+                  <LayerRow icon={<MapPin className="w-[18px] h-[18px] text-violet-400" />} name="Places & Boundaries" enabled={showArcgisPlaces} onToggle={onToggleArcgisPlaces} />
+                  <LayerRow icon={<Clock4 className="w-[18px] h-[18px] text-cyan-400" />} name="Time Zones" enabled={showTimezones} onToggle={onToggleTimezones} />
+                  <LayerRow icon={<Mountain className="w-[18px] h-[18px] text-yellow-500" />} name="Mountain Peaks" enabled={showMountains} onToggle={onToggleMountains} />
+                  <LayerRow icon={<MapPin className="w-[18px] h-[18px] text-orange-400" />} name="UNESCO Sites" enabled={showUnesco} onToggle={onToggleUnesco} />
+                </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── Day & Night Tab ──────────────────────── */}
+          <TabsContent value="daynight" className="flex-1">
+            <ScrollArea className="h-full">
+              <div className="p-8 space-y-6">
+                {/* Terminator */}
+                <div className="bg-slate-800/30 rounded-xl p-5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <SunMoon className="w-5 h-5 text-indigo-400" />
+                      <span className="text-[15px] font-medium text-blue-100">Terminator Line</span>
                     </div>
-                    <div>
-                      <div className="text-blue-100 font-medium">Blue Marble</div>
-                      <div className="text-blue-300 text-xs">USGS Natural Earth</div>
-                    </div>
+                    <Switch checked={showTerminator} onCheckedChange={onToggleTerminator} />
                   </div>
-                  {selectedBasemap === 'usgs' && (
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
-                    </div>
-                  )}
-                </div>
-
-                {/* ArcGIS Satellite */}
-                <div 
-                  onClick={() => onSetSelectedBasemap('arcgis')}
-                  className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedBasemap === 'arcgis' 
-                      ? 'bg-blue-600/30 border border-blue-400/50' 
-                      : 'bg-slate-800/50 hover:bg-slate-800/70'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-green-400">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-blue-100 font-medium">Satellite Imagery</div>
-                      <div className="text-blue-300 text-xs">ArcGIS World Imagery</div>
-                    </div>
+                  <p className="text-[13px] text-slate-500 pl-8">Day/night boundary line</p>
+                  <div className="flex items-center gap-2 pl-8">
+                    <RefreshCw className="w-3 h-3 text-teal-300/30" />
+                    <span className="text-[11px] text-teal-300/30">Every 10s</span>
+                    <span className="text-[11px] text-slate-600/50">·</span>
+                    <span className="text-[11px] text-slate-600/50">Computed</span>
                   </div>
-                  {selectedBasemap === 'arcgis' && (
-                    <div className="w-5 h-5 flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
-                    </div>
-                  )}
+                </div>
+
+                {/* Night Style Selector */}
+                <div className="bg-slate-800/30 rounded-xl p-5 space-y-4">
+                  <span className="text-sm font-medium text-slate-400">Night Style</span>
+                  <div className="flex bg-[#0f172a] rounded-xl p-1 gap-1">
+                    {nightStyles.map(ns => (
+                      <button
+                        key={ns.key}
+                        onClick={() => onSetNightStyle(ns.key)}
+                        className={`flex-1 py-2.5 px-3 rounded-lg text-[13px] font-medium transition-all ${
+                          nightStyle === ns.key
+                            ? 'bg-indigo-500/20 text-violet-300 ring-1 ring-indigo-400/30'
+                            : 'text-slate-500 hover:text-slate-400'
+                        }`}
+                      >
+                        {ns.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            </ScrollArea>
+          </TabsContent>
 
-            {/* Static Layers Section */}
-            <div>
-              <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Static Layers</h3>
-              <div className="space-y-3">
-                
-                <LayerControl
-                  title="Places & Boundaries"
-                  subtitle="Administrative labels"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-purple-400">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                  </svg>}
-                  enabled={showArcgisPlaces}
-                  onToggle={onToggleArcgisPlaces}
+          {/* ── Live Feeds Tab ───────────────────────── */}
+          <TabsContent value="live" className="flex-1">
+            <ScrollArea className="h-full">
+              <div className="p-8 space-y-2">
+                <LayerRow icon={<Building2 className="w-[18px] h-[18px] text-green-400" />} name="City Times" enabled={showCities} onToggle={onToggleCities} meta="10s" />
+                <UpdateMeta freq="Every 10s" source="Computed" />
+
+                <LayerRow icon={<Radio className="w-[18px] h-[18px] text-yellow-400" />} name="ISS Tracking" enabled={showISS} loading={isISSLoading} onToggle={onToggleISS} meta="10s" />
+                <UpdateMeta freq="Every 10s" />
+
+                <LayerRow icon={<Activity className="w-[18px] h-[18px] text-red-500" />} name="Earthquakes" enabled={showEarthquakes} loading={isEarthquakesLoading} onToggle={onToggleEarthquakes} meta="1h" />
+                <UpdateMeta freq="Hourly" lastUpdate={earthquakeLastUpdate} source="USGS" />
+
+                <LayerRow icon={<Wind className="w-[18px] h-[18px] text-orange-400" />} name="Hurricanes" enabled={showHurricanes} loading={isHurricanesLoading} onToggle={onToggleHurricanes} meta="1h" />
+                <UpdateMeta
+                  freq="Hourly"
+                  lastUpdate={hurricaneLastUpdate}
+                  source={hurricaneLayerCount > 0 ? 'NHC/JTWC' : undefined}
                 />
 
-                <LayerControl
-                  title="Time Zones"
-                  subtitle="World timezone boundaries"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-cyan-400">
-                    <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,15.4L16.2,16.2Z"/>
-                  </svg>}
-                  enabled={showTimezones}
-                  onToggle={onToggleTimezones}
-                />
-
-                <LayerControl
-                  title="Mountain Peaks"
-                  subtitle="Elevation markers"
-                  icon={<svg width="16" height="16" viewBox="0 0 15 15" fill="currentColor" className="text-yellow-500">
-                    <path d="M7.5 1c-.3 0-.4.2-.6.4l-5.8 9.5c-.1.1-.1.3-.1.4c0 .5.4.7.7.7h11.6c.4 0 .7-.2.7-.7c0-.2 0-.2-.1-.4L8.2 1.4C8 1.2 7.8 1 7.5 1m0 1.5L10.8 8H10L8.5 6.5L7.5 8l-1-1.5L5 8h-.9z"/>
-                  </svg>}
-                  enabled={showMountains}
-                  onToggle={onToggleMountains}
-                />
-
-                <LayerControl
-                  title="UNESCO Sites"
-                  subtitle="World Heritage sites"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-orange-400">
-                    <path d="M12 11.5A2.5 2.5 0 0 1 9.5 9A2.5 2.5 0 0 1 12 6.5A2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7"/>
-                  </svg>}
-                  enabled={showUnesco}
-                  onToggle={onToggleUnesco}
-                />
-              </div>
-            </div>
-
-            {/* Dynamic Layers Section */}
-            <div>
-              <h3 className="text-sm font-medium text-blue-200 mb-4 uppercase tracking-wide">Dynamic Layers</h3>
-              <div className="space-y-3">
-
-                <LayerControl
-                  title="City Times"
-                  subtitle="Major city time zones"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-green-400">
-                    <path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/>
-                  </svg>}
-                  enabled={showCities}
-                  onToggle={onToggleCities}
-                />
-
-                <LayerControl
-                  title="Day/Night Terminator"
-                  subtitle="Real-time shadow line"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                  </svg>}
-                  enabled={showTerminator}
-                  onToggle={onToggleTerminator}
-                />
-
-                <LayerControl
-                  title="ISS Tracking"
-                  subtitle={isISSLoading ? 'Loading...' : 'Real-time position & orbit'}
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
-                    <path d="M15.5 19v2h-1.77c-.34.6-.99 1-1.73 1s-1.39-.4-1.73-1H8.5v-2h1.77c.17-.3.43-.56.73-.73V17h-1c-.55 0-1-.45-1-1v-3H6v4c0 .55-.45 1-1 1H3c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h1V6h-1c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v1c0 .55-.45 1-1 1h-1v1h1c.55 0 1 .45 1 1v3h3V8c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v9c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-4h-3v3c0 .55-.45 1-1 1h-1v1.27c.3.17.56.43.73.73zM3 16v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8zm16 8v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2v-1zm0-2v1h2V8z"/>
-                  </svg>}
-                  enabled={showISS}
-                  loading={isISSLoading}
-                  onToggle={onToggleISS}
-                />
-
-                <LayerControl
-                  title="Earthquakes"
-                  subtitle={isEarthquakesLoading ? 'Loading...' : earthquakeLastUpdate ? `Updated ${earthquakeLastUpdate.toLocaleTimeString()}` : 'Real-time seismic data'}
-                  icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-red-500">
-                    <circle cx="8" cy="8" r="1" fill="currentColor"/>
-                    <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="0.8"/>
-                    <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="0.6" opacity="0.7"/>
-                  </svg>}
-                  enabled={showEarthquakes}
-                  loading={isEarthquakesLoading}
-                  onToggle={onToggleEarthquakes}
-                />
-
-                <LayerControl
-                  title="Hurricane Tracking"
-                  subtitle={isHurricanesLoading ? 'Loading...' : hurricaneLastUpdate ? `Updated ${hurricaneLastUpdate.toLocaleTimeString()}` : 'Live storm tracking'}
-                  icon={<svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-orange-400">
-                    <circle cx="8" cy="8" r="2.5" fill="none" stroke="currentColor" strokeWidth="1"/>
-                    <path d="M6 3.5l-0.1 0.2A8 8 0 0 0 5.2 8.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-                    <path d="M10 12.5l0.1-0.2A8 8 0 0 0 10.8 7.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-                  </svg>}
-                  enabled={showHurricanes}
-                  loading={isHurricanesLoading}
-                  onToggle={onToggleHurricanes}
-                />
-
-                <LayerControl
-                  title="Aircraft Tracking"
-                  subtitle={isPlanesLoading ? 'Loading...' : planeLastUpdate ? `Updated ${planeLastUpdate.toLocaleTimeString()}` : 'Real-time flight data'}
-                  icon={<svg width="16" height="16" viewBox="0 0 128 128" fill="currentColor" className="text-sky-400">
-                    <path d="M64 20 L68 45 L64 55 L60 45 Z"/>
-                    <path d="M30 50 L98 50 L94 60 L34 60 Z"/>
-                    <path d="M58 75 L70 75 L66 90 L62 90 Z"/>
-                    <path d="M45 82 L83 82 L81 88 L47 88 Z"/>
-                  </svg>}
-                  enabled={showPlanes}
-                  loading={isPlanesLoading}
-                  onToggle={onTogglePlanes}
-                />
-              </div>
-            </div>
-
-            {/* City Manager */}
-            <CityManager />
-
-            {/* Current Time Display */}
-            <div className="border-t border-blue-200/10 pt-6">
-              <h3 className="text-sm font-medium text-blue-200 mb-3 uppercase tracking-wide">System Time</h3>
-              <div className="p-3 bg-slate-800/50 rounded-lg">
-                <div className="text-blue-100 font-mono text-sm">
-                  {currentTime.toLocaleString()}
+                {/* City Manager */}
+                <div className="pt-5">
+                  <CityManager />
                 </div>
-                <div className="text-blue-300 text-xs mt-1">
-                  Updates every 10 seconds
+
+                {/* System Time */}
+                <div className="border-t border-blue-200/10 pt-4 mt-4">
+                  <div className="flex items-center gap-2.5 px-4">
+                    <Clock4 className="w-3.5 h-3.5 text-slate-600" />
+                    <span className="text-[12px] text-slate-500 font-mono">
+                      {currentTime.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Overlay for closing panel */}
       {isMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/10 z-10"
           onClick={onToggleMenu}
         />

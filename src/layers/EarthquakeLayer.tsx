@@ -8,6 +8,25 @@ import type { Layer } from '@deck.gl/core';
 import { CONFIG } from '../config';
 import { safeAsyncOperation } from '../utils/errorHandler';
 
+// ── Earthquake animation constants ───────────────────────────────────────
+const EQ_RING_COUNT = 5;
+const EQ_LINE_WIDTHS = [3.5, 3.0, 2.5, 2.0, 1.5];
+const EQ_RADIUS_MIN_PX = 4;
+const EQ_RADIUS_MAX_PX = 28;
+const EQ_PHI_EXPONENT = 0.4;
+const EQ_PHASE_SPREAD = 0.8;
+const EQ_BASE_OPACITY = 0.75;
+const EQ_OPACITY_DECAY = 0.1;
+const EQ_EPICENTER_SCALE = 0.35;
+export const EQ_PULSE_DURATION_MS = 5000;
+const EQ_LINE_COLOR: [number, number, number] = [220, 30, 30];
+const EQ_EPICENTER_COLOR: [number, number, number, number] = [220, 30, 30, 255];
+
+/** Magnitude line-width factor: M4.5→0.5x, M5.5→0.7x, M7→1.0x, M8→1.15x */
+function magLineWidthFactor(mag: number): number {
+  return Math.max(0.4, Math.min(1.15, (mag - 3.5) / 3.5));
+}
+
 // USGS Earthquake API interfaces
 interface USGSEarthquakeProperties {
   mag: number;           // Magnitude (0.0-10.0+)
@@ -175,12 +194,11 @@ export class EarthquakeManager extends BaseDataManager<EarthquakeLayerData> {
 
 
 /**
- * Get magnitude-based size
+ * Get magnitude-based size — linear mapping from [4.5, 9.0] to [min, max] px
  */
 function getEarthquakeRadius(magnitude: number): number {
-  // Exponential scaling — Richter is logarithmic, so each +1 = ~3x energy
-  // M4=4px, M4.5=6px, M5=8px, M6=16px, M7=32px, M8=64px
-  return Math.pow(2, magnitude - 4) * 4;
+  const t = Math.max(0, Math.min(1, (magnitude - 4.5) / 4.5));
+  return EQ_RADIUS_MIN_PX + t * (EQ_RADIUS_MAX_PX - EQ_RADIUS_MIN_PX);
 }
 
 
@@ -237,15 +255,31 @@ export function createEarthquakeLayers(_currentTime: Date, currentZoom: number =
 
   if (filteredEarthquakes.length > 0) {
     const PHI = 1.618;
-    const RING_COUNT = 5;
-    const RING_LINE_WIDTHS = [2.5, 2.0, 1.5, 1.2, 1.0];
 
-    for (let i = 0; i < RING_COUNT; i++) {
-      const phase = (pulsePhase + i / RING_COUNT) % 1;
-      const ringScale = Math.pow(PHI, i * 0.4) * (1 + phase * 0.8);
+    // Dark halo — semi-transparent black disc behind the pulse for contrast on any terrain
+    layers.push(new ScatterplotLayer({
+      id: 'earthquake-dark-halo',
+      data: filteredEarthquakes,
+      getPosition: (d: USGSEarthquakeFeature) => [
+        d.geometry.coordinates[0],
+        d.geometry.coordinates[1]
+      ],
+      getRadius: (d: USGSEarthquakeFeature) => getEarthquakeRadius(d.properties.mag) * 2.0,
+      radiusUnits: 'pixels',
+      filled: true,
+      stroked: false,
+      getFillColor: [0, 0, 0, 120],
+      pickable: false,
+    }));
+
+    // Pulsing shockwave rings — magnitude-scaled line widths
+    for (let i = 0; i < EQ_RING_COUNT; i++) {
+      const phase = (pulsePhase + i / EQ_RING_COUNT) % 1;
+      const ringScale = Math.pow(PHI, i * EQ_PHI_EXPONENT) * (1 + phase * EQ_PHASE_SPREAD);
       const fadeIn = Math.min(phase / 0.15, 1);
       const fadeOut = Math.max(0, 1 - phase);
-      const ringOpacity = fadeIn * fadeOut * Math.max(0.1, 0.5 - i * 0.08);
+      const ringOpacity = fadeIn * fadeOut * Math.max(0.1, EQ_BASE_OPACITY - i * EQ_OPACITY_DECAY);
+      const baseWidth = EQ_LINE_WIDTHS[i];
 
       layers.push(new ScatterplotLayer({
         id: `earthquake-pulse-ring-${i}`,
@@ -258,9 +292,9 @@ export function createEarthquakeLayers(_currentTime: Date, currentZoom: number =
         radiusScale: ringScale,
         radiusUnits: 'pixels',
         getFillColor: [0, 0, 0, 0],
-        getLineColor: [220, 30, 30],
+        getLineColor: EQ_LINE_COLOR,
         opacity: ringOpacity,
-        getLineWidth: RING_LINE_WIDTHS[i],
+        getLineWidth: (d: USGSEarthquakeFeature) => baseWidth * magLineWidthFactor(d.properties.mag),
         stroked: true,
         filled: false,
         lineWidthUnits: 'pixels',
@@ -268,7 +302,7 @@ export function createEarthquakeLayers(_currentTime: Date, currentZoom: number =
       }));
     }
 
-    // Red epicenter dot — scales with magnitude
+    // Epicenter dot — scales with magnitude
     layers.push(new ScatterplotLayer({
       id: 'earthquake-epicenter-dots',
       data: filteredEarthquakes,
@@ -276,11 +310,11 @@ export function createEarthquakeLayers(_currentTime: Date, currentZoom: number =
         d.geometry.coordinates[0],
         d.geometry.coordinates[1]
       ],
-      getRadius: (d: USGSEarthquakeFeature) => Math.max(2, getEarthquakeRadius(d.properties.mag) * 0.25),
+      getRadius: (d: USGSEarthquakeFeature) => Math.max(2, getEarthquakeRadius(d.properties.mag) * EQ_EPICENTER_SCALE),
       radiusUnits: 'pixels',
       filled: true,
       stroked: false,
-      getFillColor: [220, 30, 30, 255],
+      getFillColor: EQ_EPICENTER_COLOR,
       pickable: false,
     }));
 

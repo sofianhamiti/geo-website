@@ -7,6 +7,7 @@ import { getCategoryColor } from '../utils/IconFactory';
 import type {
   TrajectoryFeature,
   ProcessedStorm,
+  ColoredTrackSegment,
   HurricaneLayerData
 } from '../types/hurricane';
 
@@ -125,41 +126,49 @@ function createCurrentPositionLayers(processedStorms: readonly ProcessedStorm[],
 }
 
 /**
- * Create per-storm trajectory paths — one PathLayer per storm to prevent cross-storm links
+ * Create per-storm trajectory paths with per-segment category coloring
  */
 function createStormTrackLayers(processedStorms: readonly ProcessedStorm[]): Layer[] {
   const layers: Layer[] = [];
   if (!processedStorms || processedStorms.length === 0) return layers;
 
   for (const storm of processedStorms) {
-    // Build full path: historical positions → current → forecast
-    const path: [number, number][] = [];
+    const segments = storm.coloredTrackSegments;
 
-    for (const pos of storm.historical) {
-      path.push([pos.geometry.x, pos.geometry.y]);
+    if (segments.length > 0) {
+      // Use pre-computed colored segments for per-category coloring
+      layers.push(new PathLayer<ColoredTrackSegment>({
+        id: `hurricane-track-${storm.stormId}`,
+        data: segments as ColoredTrackSegment[],
+        getPath: (d) => d.path as [number, number][],
+        getColor: (d) => d.color as [number, number, number, number],
+        getWidth: 2,
+        widthUnits: 'pixels',
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }));
+    } else {
+      // Fallback: single-color path if no segments available
+      const path: [number, number][] = [];
+      for (const pos of storm.historical) path.push([pos.geometry.x, pos.geometry.y]);
+      if (storm.current) path.push([storm.current.geometry.x, storm.current.geometry.y]);
+      for (const pos of storm.forecast) path.push([pos.geometry.x, pos.geometry.y]);
+      if (path.length < 2) continue;
+
+      const color = getCategoryColor(storm.currentCategory);
+      layers.push(new PathLayer({
+        id: `hurricane-track-${storm.stormId}`,
+        data: [{ path }],
+        getPath: (d: any) => d.path,
+        getColor: [color[0], color[1], color[2], 180],
+        getWidth: 2,
+        widthUnits: 'pixels',
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }));
     }
-    if (storm.current) {
-      path.push([storm.current.geometry.x, storm.current.geometry.y]);
-    }
-    for (const pos of storm.forecast) {
-      path.push([pos.geometry.x, pos.geometry.y]);
-    }
-
-    if (path.length < 2) continue;
-
-    const color = getCategoryColor(storm.currentCategory);
-
-    layers.push(new PathLayer({
-      id: `hurricane-track-${storm.stormId}`,
-      data: [{ path }],
-      getPath: (d: any) => d.path,
-      getColor: [color[0], color[1], color[2], 180],
-      getWidth: 2,
-      widthUnits: 'pixels',
-      capRounded: true,
-      jointRounded: true,
-      pickable: false,
-    }));
   }
 
   return layers;

@@ -11,7 +11,7 @@ import ISSVideoOverlay from './ISSVideoOverlay';
 const Map: React.FC = () => {
   const [currentZoom, setCurrentZoom] = useState(2);
   const [displayTime, setDisplayTime] = useState(new Date());
-  
+
   // Get all state and actions from store
   const {
     map,
@@ -19,6 +19,7 @@ const Map: React.FC = () => {
     selectedBasemap,
     showArcgisPlaces,
     showTerminator,
+    showNight,
     showCities,
     showMountains,
     showUnesco,
@@ -26,7 +27,6 @@ const Map: React.FC = () => {
     showISS,
     showHurricanes,
     showEarthquakes,
-    showPlanes,
     issLayers,
     issManager,
     isISSLoading,
@@ -38,10 +38,8 @@ const Map: React.FC = () => {
     earthquakeManager,
     earthquakeLastUpdate,
     isEarthquakesLoading,
-    planeLayers,
-    planeManager,
-    planeLastUpdate,
-    isPlanesLoading,
+    nightStyle,
+    projection,
     timezoneLayers,
     isMenuOpen,
     currentTime,
@@ -58,7 +56,6 @@ const Map: React.FC = () => {
     toggleISS,
     toggleHurricanes,
     toggleEarthquakes,
-    togglePlanes,
     toggleMenu,
     updateTime,
     setISSLayers,
@@ -66,8 +63,8 @@ const Map: React.FC = () => {
     setHurricaneLastUpdate,
     setEarthquakeLayers,
     setEarthquakeLastUpdate,
-    setPlaneLayers,
-    setPlaneLastUpdate,
+    setNightStyle,
+    setProjection,
     setTimezoneLayers,
     initializeISSManager,
     destroyISSManager,
@@ -75,8 +72,6 @@ const Map: React.FC = () => {
     destroyHurricaneManager,
     initializeEarthquakeManager,
     destroyEarthquakeManager,
-    initializePlaneManager,
-    destroyPlaneManager,
     loadSavedCities,
     setISSVideoVisible,
   } = useMapStore();
@@ -97,12 +92,10 @@ const Map: React.FC = () => {
       showISS,
       showHurricanes,
       showEarthquakes,
-      showPlanes,
       showTimezones,
       issManager,
       hurricaneManager,
       earthquakeManager,
-      planeManager,
     },
     {
       initializeISSManager,
@@ -111,16 +104,12 @@ const Map: React.FC = () => {
       destroyHurricaneManager,
       initializeEarthquakeManager,
       destroyEarthquakeManager,
-      initializePlaneManager,
-      destroyPlaneManager,
       setISSLayers,
       setHurricaneLayers,
       setEarthquakeLayers,
-      setPlaneLayers,
       setTimezoneLayers,
       setHurricaneLastUpdate,
       setEarthquakeLastUpdate,
-      setPlaneLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -131,6 +120,7 @@ const Map: React.FC = () => {
   const layers = useMapLayers(
     {
       showTerminator,
+      showNight,
       showCities,
       showMountains,
       showUnesco,
@@ -138,17 +128,15 @@ const Map: React.FC = () => {
       showISS,
       showHurricanes,
       showEarthquakes,
-      showPlanes,
+      nightStyle,
     },
     {
       issLayers,
       hurricaneLayers,
       earthquakeLayers,
-      planeLayers,
       timezoneLayers,
       hurricaneLastUpdate,
       earthquakeLastUpdate,
-      planeLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -166,7 +154,15 @@ const Map: React.FC = () => {
   // Update deck.gl overlay with new layers
   useEffect(() => {
     if (map && (map as any)._deckOverlay) {
-      (map as any)._deckOverlay.setProps({ layers });
+      // Sync hurricane icon angle from performance.now() so React re-renders
+      // don't flash a stale angle before the animation loop corrects it
+      const hcAngle = (performance.now() * 360 / 10000) % 360;
+      const synced = layers.map((layer: any) =>
+        layer.id === 'hurricane-positions'
+          ? layer.clone({ getAngle: hcAngle })
+          : layer
+      );
+      (map as any)._deckOverlay.setProps({ layers: synced });
     }
   }, [layers, map]);
 
@@ -200,10 +196,29 @@ const Map: React.FC = () => {
     return () => map.off('zoomend', handleZoomEnd);
   }, [map]);
 
+  // Projection switching (2D ↔ 3D globe)
+  useEffect(() => {
+    if (!map) return;
+
+    map.setProjection({ type: projection });
+
+    if (projection === 'globe') {
+      map.setMinZoom(0);
+      map.dragRotate.enable();
+      map.touchZoomRotate.enable();
+    } else {
+      map.setMinZoom(CONFIG.map.zoom.min);
+      map.dragRotate.disable();
+      map.touchZoomRotate.disable();
+      map.setBearing(0);
+      map.setPitch(0);
+    }
+  }, [map, projection]);
+
   return (
     <div className="relative w-full h-screen">
       <div ref={mapContainer} className="w-full h-full" />
-      
+
       {/* Loading Screen */}
       {!isMapLoaded && (
         <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
@@ -227,14 +242,12 @@ const Map: React.FC = () => {
         showISS={showISS}
         showEarthquakes={showEarthquakes}
         showHurricanes={showHurricanes}
-        showPlanes={showPlanes}
         isISSLoading={isISSLoading}
         isEarthquakesLoading={isEarthquakesLoading}
         isHurricanesLoading={isHurricanesLoading}
-        isPlanesLoading={isPlanesLoading}
         earthquakeLastUpdate={earthquakeLastUpdate}
         hurricaneLastUpdate={hurricaneLastUpdate}
-        planeLastUpdate={planeLastUpdate}
+        hurricaneLayerCount={hurricaneLayers.length}
         currentTime={currentTime}
         onToggleMenu={toggleMenu}
         onSetSelectedBasemap={setSelectedBasemap}
@@ -247,7 +260,10 @@ const Map: React.FC = () => {
         onToggleISS={toggleISS}
         onToggleEarthquakes={toggleEarthquakes}
         onToggleHurricanes={toggleHurricanes}
-        onTogglePlanes={togglePlanes}
+        nightStyle={nightStyle}
+        onSetNightStyle={setNightStyle}
+        isGlobe={projection === 'globe'}
+        onToggleProjection={() => setProjection(projection === 'globe' ? 'mercator' : 'globe')}
       />
 
       {/* Date/Time Display */}

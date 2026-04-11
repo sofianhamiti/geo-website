@@ -1,0 +1,32 @@
+name: Update ISS Stream URLs
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Weekly on Mondays at 8am UTC
+  workflow_dispatch: # Manual trigger from Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-streams:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
+      - name: Find ISS streams and update config
+        run: python scripts/update-iss-streams.py
+
+      - name: Commit and push if changed
+        run: |
+          git diff --quiet src/config.ts && echo "No changes" && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/config.ts
+          git commit -m "update ISS livestream video IDs"
+          git push

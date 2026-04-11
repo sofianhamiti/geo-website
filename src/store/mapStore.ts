@@ -3,7 +3,7 @@ import { City, DEFAULT_CITIES, loadUserCities, saveUserCities } from '../service
 import { ISSManager } from '../layers/ISSLayer';
 import { EarthquakeManager } from '../layers/EarthquakeLayer';
 import { HurricaneManager } from '../layers/HurricaneLayer';
-import { PlaneManager } from '../layers/PlanesLayer';
+
 
 export interface MapState {
   // Map instance and status
@@ -44,14 +44,14 @@ export interface MapState {
   earthquakeManager: EarthquakeManager | null;
   earthquakeLastUpdate: Date | null;
   isEarthquakesLoading: boolean;
-  
-  // Planes tracking
-  showPlanes: boolean;
-  planeLayers: any[];
-  planeManager: PlaneManager | null;
-  planeLastUpdate: Date | null;
-  isPlanesLoading: boolean;
-  
+
+  // Projection
+  projection: 'mercator' | 'globe';
+
+  // Night visualization
+  showNight: boolean;
+  nightStyle: 'off' | 'shadow' | 'masked';
+
   // Timezone layers
   timezoneLayers: any[];
   
@@ -105,15 +105,11 @@ export interface MapState {
   destroyEarthquakeManager: () => void;
   setEarthquakeLastUpdate: (timestamp: Date | null) => void;
   setEarthquakesLoading: (loading: boolean) => void;
-  
-  // Planes actions
-  togglePlanes: () => void;
-  setPlaneLayers: (layers: any[]) => void;
-  initializePlaneManager: () => Promise<void>;
-  destroyPlaneManager: () => void;
-  setPlaneLastUpdate: (timestamp: Date | null) => void;
-  setPlanesLoading: (loading: boolean) => void;
-  
+
+  setProjection: (projection: 'mercator' | 'globe') => void;
+  toggleNight: () => void;
+  setNightStyle: (style: 'off' | 'shadow' | 'masked') => void;
+
   // Timezone actions
   setTimezoneLayers: (layers: any[]) => void;
   
@@ -131,7 +127,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   isMapLoaded: false,
   selectedBasemap: 'eox', // Default to EOX Sentinel-2 Cloudless
   showArcgisPlaces: false,
-  showTerminator: true,
+  showTerminator: false,
   showCities: true,
   showMountains: false,
   showUnesco: false,
@@ -151,11 +147,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   earthquakeManager: null,
   earthquakeLastUpdate: null,
   isEarthquakesLoading: false,
-  showPlanes: false,
-  planeLayers: [],
-  planeManager: null,
-  planeLastUpdate: null,
-  isPlanesLoading: false,
+  earthquakeStyle: 'current' as 'current' | 'A' | 'B' | 'C',
+  projection: 'mercator' as 'mercator' | 'globe',
+  showNight: true,
+  nightStyle: 'shadow' as 'off' | 'shadow' | 'masked',
   timezoneLayers: [],
   isMenuOpen: false,
   currentTime: new Date(),
@@ -399,55 +394,15 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ isEarthquakesLoading: loading });
   },
 
-  // Planes actions
-  togglePlanes: () => {
-    const currentState = get().showPlanes;
-    const newState = !currentState;
-    
-    if (!newState) {
-      // If disabling planes, cleanup manager
-      const { planeManager } = get();
-      if (planeManager) {
-        planeManager.destroy();
-        set({ planeManager: null, planeLayers: [] });
-      }
-    }
-    
-    set({ showPlanes: newState });
-  },
+  setProjection: (projection) => set({ projection }),
 
-  setPlaneLayers: (layers) => {
-    set({ planeLayers: layers });
-  },
+  toggleNight: () => set({ showNight: !get().showNight }),
 
-  initializePlaneManager: async () => {
-    const { planeManager } = get();
-    if (planeManager) return; // Already initialized
-
-    try {
-      set({ isPlanesLoading: true });
-      const manager = new PlaneManager();
-      await manager.initialize();
-      set({ planeManager: manager, isPlanesLoading: false });
-    } catch (error) {
-      set({ isPlanesLoading: false });
-    }
-  },
-
-  destroyPlaneManager: () => {
-    const { planeManager } = get();
-    if (planeManager) {
-      planeManager.destroy();
-      set({ planeManager: null, planeLayers: [], showPlanes: false });
-    }
-  },
-
-  setPlaneLastUpdate: (timestamp) => {
-    set({ planeLastUpdate: timestamp });
-  },
-
-  setPlanesLoading: (loading) => {
-    set({ isPlanesLoading: loading });
+  setNightStyle: (style) => {
+    set({
+      nightStyle: style,
+      showNight: style !== 'off',
+    });
   },
 
   // Timezone actions

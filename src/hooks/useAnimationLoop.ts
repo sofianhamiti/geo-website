@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { useMapStore } from '../store/mapStore';
+import { EQ_PULSE_DURATION_MS } from '../layers/EarthquakeLayer';
 
-const EQ_PULSE_DURATION_MS = 5000;
 const PHI = 1.618;
 
-// Earthquake: 5 shockwave rings
+// Earthquake animation constants (matching EarthquakeLayer)
 const EQ_RING_COUNT = 5;
-const EQ_LINE_WIDTHS = [2.5, 2.0, 1.5, 1.2, 1.0];
+const EQ_PHI_EXPONENT = 0.4;
+const EQ_PHASE_SPREAD = 0.8;
+const EQ_BASE_OPACITY = 0.75;
+const EQ_OPACITY_DECAY = 0.1;
 
 // Hurricane: one full rotation in 10 seconds
 const HC_ROTATION_SPEED = 360 / 10000; // degrees per ms
@@ -54,16 +57,15 @@ export function useAnimationLoop() {
         if (eqMatch && hasEq) {
           const i = parseInt(eqMatch[1]);
           const phase = (eqT + i / EQ_RING_COUNT) % 1;
-          const ringScale = Math.pow(PHI, i * 0.4) * (1 + phase * 0.8);
+          const ringScale = Math.pow(PHI, i * EQ_PHI_EXPONENT) * (1 + phase * EQ_PHASE_SPREAD);
           const fadeIn = Math.min(phase / 0.15, 1);
           const fadeOut = Math.max(0, 1 - phase);
-          const ringOpacity = fadeIn * fadeOut * Math.max(0.1, 0.5 - i * 0.08);
+          const ringOpacity = fadeIn * fadeOut * Math.max(0.1, EQ_BASE_OPACITY - i * EQ_OPACITY_DECAY);
 
           changed = true;
           return layer.clone({
             radiusScale: ringScale,
             opacity: ringOpacity,
-            getLineWidth: EQ_LINE_WIDTHS[i] || 1.0,
           });
         }
 

@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
-import { createTerminatorLayer } from '../layers/TerminatorLayer';
+import { createNightLayers, createTerminatorLayer, type NightStyleKey } from '../layers/NightLayer';
 import { createMountainsLayers } from '../layers/MountainsLayer';
 import { createUnescoLayers } from '../layers/UnescoLayer';
 import { createCityTimesLayers } from '../layers/CityTimesLayer';
@@ -12,6 +12,7 @@ import type { City } from '../services/simpleCityService';
 
 interface LayerVisibility {
   showTerminator: boolean;
+  showNight: boolean;
   showCities: boolean;
   showMountains: boolean;
   showUnesco: boolean;
@@ -19,18 +20,16 @@ interface LayerVisibility {
   showISS: boolean;
   showHurricanes: boolean;
   showEarthquakes: boolean;
-  showPlanes: boolean;
+  nightStyle: NightStyleKey;
 }
 
 interface LayerData {
   issLayers: any[];
   hurricaneLayers: any[];
   earthquakeLayers: any[];
-  planeLayers: any[];
   timezoneLayers: any[];
   hurricaneLastUpdate: Date | null;
   earthquakeLastUpdate: Date | null;
-  planeLastUpdate: Date | null;
 }
 
 export const useMapLayers = (
@@ -96,15 +95,26 @@ export const useMapLayers = (
   // Time-dependent layers
   const timeDependentLayers = useMemo(() => {
     const layers: any[] = [];
-    
-    // Terminator layer
-    const terminatorLayer = createTerminatorLayer(currentTime);
-    if (terminatorLayer) {
-      layers.push(terminatorLayer.clone({
+
+    // Night visualization layers (shadow / black marble)
+    if (visibility.showNight) {
+      const nightLayers = createNightLayers(currentTime, visibility.nightStyle);
+      nightLayers.forEach(layer => {
+        layers.push(layer.clone({
+          visible: true,
+          updateTriggers: { getFillColor: currentTime.getTime() }
+        }));
+      });
+    }
+
+    // Terminator line (independent of night visualization)
+    const terminatorLayers = createTerminatorLayer(currentTime);
+    terminatorLayers.forEach(layer => {
+      layers.push(layer.clone({
         visible: visibility.showTerminator,
         updateTriggers: { getPath: currentTime.getTime() }
       }));
-    }
+    });
 
     // City times layers
     const cityTimesLayers = createCityTimesLayers(cities, currentTime);
@@ -117,9 +127,9 @@ export const useMapLayers = (
         }
       }));
     });
-    
+
     return layers;
-  }, [currentTime, visibility.showTerminator, visibility.showCities, cities]);
+  }, [currentTime, visibility.showTerminator, visibility.showNight, visibility.nightStyle, visibility.showCities, cities]);
 
   // Earthquake layers (bottom-most data layer)
   const earthquakeLayers = useMemo(() => {
@@ -154,32 +164,15 @@ export const useMapLayers = (
           updateTriggers: {
             getPosition: layerData.hurricaneLastUpdate?.getTime() || currentTime.getTime(),
             getText: layerData.hurricaneLastUpdate?.getTime() || currentTime.getTime(),
-            getAngle: Math.floor(Date.now() / 100),
           }
         }));
       });
     }
 
-    // Planes tracking layers
-    if (visibility.showPlanes && layerData.planeLayers.length > 0) {
-      layerData.planeLayers.forEach(layer => {
-        layers.push(layer.clone({
-          visible: visibility.showPlanes,
-          updateTriggers: {
-            getPosition: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
-            getSize: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
-            getColor: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
-            getAngle: layerData.planeLastUpdate?.getTime() || currentTime.getTime(),
-          }
-        }));
-      });
-    }
-    
     return layers;
   }, [
     visibility.showHurricanes, layerData.hurricaneLayers, layerData.hurricaneLastUpdate,
-    visibility.showPlanes, layerData.planeLayers, layerData.planeLastUpdate,
-    currentTime
+currentTime
   ]);
 
   // ISS layers (top-most data layer)

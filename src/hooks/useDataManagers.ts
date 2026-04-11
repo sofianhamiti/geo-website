@@ -2,19 +2,16 @@ import { useEffect } from 'react';
 import { createISSLayers } from '../layers/ISSLayer';
 import { createHurricaneLayers } from '../layers/HurricaneLayer';
 import { createEarthquakeLayers } from '../layers/EarthquakeLayer';
-import { createPlaneLayers } from '../layers/PlanesLayer';
 import { createTimeZonesLayers } from '../layers/TimeZonesLayer';
 
 interface ManagerState {
   showISS: boolean;
   showHurricanes: boolean;
   showEarthquakes: boolean;
-  showPlanes: boolean;
   showTimezones: boolean;
   issManager: any;
   hurricaneManager: any;
   earthquakeManager: any;
-  planeManager: any;
 }
 
 interface ManagerActions {
@@ -24,16 +21,12 @@ interface ManagerActions {
   destroyHurricaneManager: () => void;
   initializeEarthquakeManager: () => Promise<void>;
   destroyEarthquakeManager: () => void;
-  initializePlaneManager: () => Promise<void>;
-  destroyPlaneManager: () => void;
   setISSLayers: (layers: any[]) => void;
   setHurricaneLayers: (layers: any[]) => void;
   setEarthquakeLayers: (layers: any[]) => void;
-  setPlaneLayers: (layers: any[]) => void;
   setTimezoneLayers: (layers: any[]) => void;
   setHurricaneLastUpdate: (date: Date) => void;
   setEarthquakeLastUpdate: (date: Date) => void;
-  setPlaneLastUpdate: (date: Date) => void;
 }
 
 export const useDataManagers = (
@@ -111,29 +104,6 @@ export const useDataManagers = (
       actions.setEarthquakeLayers([]);
     }
   }, [state.showEarthquakes, state.earthquakeManager, currentTime, currentZoom, actions.setEarthquakeLayers, actions.setEarthquakeLastUpdate]);
-
-  // Planes Manager Effects
-  useEffect(() => {
-    if (state.showPlanes && !state.planeManager) {
-      actions.initializePlaneManager();
-    } else if (!state.showPlanes && state.planeManager) {
-      actions.destroyPlaneManager();
-    }
-  }, [state.showPlanes, state.planeManager, actions.initializePlaneManager, actions.destroyPlaneManager]);
-
-  useEffect(() => {
-    if (state.showPlanes && state.planeManager) {
-      try {
-        const layers = createPlaneLayers(currentTime);
-        actions.setPlaneLayers(layers);
-        actions.setPlaneLastUpdate(new Date());
-      } catch (error) {
-        actions.setPlaneLayers([]);
-      }
-    } else {
-      actions.setPlaneLayers([]);
-    }
-  }, [state.showPlanes, state.planeManager, currentTime, actions.setPlaneLayers, actions.setPlaneLastUpdate]);
 
   // Timezone Manager Effects
   useEffect(() => {
