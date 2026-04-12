@@ -103,46 +103,21 @@ export class RainRadarManager extends BaseDataManager<RainRadarData> {
   }
 }
 
-// ── Tile fetcher — clamp z to RainViewer's max (7) ─────────────────
-// RainViewer returns an error-text PNG for z >= 8.  Instead of relying
-// on deck.gl's overzoom behaviour (which is unreliable with 6 stacked
-// animated TileLayers), we let deck.gl request tiles at any z the map
-// needs and silently clamp the URL to z=7.  The BitmapLayer stretches
-// the image to the tile's geographic bounds, so it looks upscaled.
-
-const RAIN_MAX_NATIVE_ZOOM = CONFIG.rainRadar.maxZoom; // 7
-
-function makeRainTileFetcher(host: string, framePath: string) {
-  return async (props: any) => {
-    const { index, signal } = props;
-    const z = Math.min(index.z, RAIN_MAX_NATIVE_ZOOM);
-
-    // When overzoomed, map the requested x/y back to the clamped z
-    const dz = index.z - z;
-    const x = index.x >> dz;
-    const y = index.y >> dz;
-
-    const url = `${host}${framePath}/256/${z}/${x}/${y}/6/1_1.png`;
-    const res = await fetch(url, { signal });
-    if (signal?.aborted) return null;
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await createImageBitmap(blob);
-  };
-}
-
 // ── Layer factory ────────────────────────────────────────────────────
 
 export function createRainRadarLayers(): Layer[] {
   const { frames, host, error } = rainRadarCache;
   if (error || frames.length === 0) return [];
 
+  // RainViewer only serves tiles up to z7. We set maxZoom to match so
+  // deck.gl never requests higher zoom tiles (which return error PNGs).
+  // The map's own maxZoom should also be ≤ 7 to avoid blank areas.
   return frames.map((frame, i) =>
     new TileLayer({
       id: `${CONFIG.layerIds.rainRadar}-${i}`,
-      getTileData: makeRainTileFetcher(host, frame.path),
+      data: `${host}${frame.path}/256/{z}/{x}/{y}/6/1_1.png`,
       minZoom: 0,
-      maxZoom: 8,
+      maxZoom: CONFIG.rainRadar.maxZoom,
       tileSize: CONFIG.rainRadar.tileSize,
       refinementStrategy: 'best-available',
       maxCacheSize: 150,

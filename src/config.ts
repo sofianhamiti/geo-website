@@ -9,7 +9,7 @@ export const CONFIG = {
     zoom: {
       default: 1.5,
       min: 1,
-      max: 8,
+      max: 7,
     },
   },
 
@@ -20,7 +20,7 @@ export const CONFIG = {
     arcgisPlaces: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
     eoxSentinel: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg',
     tileSize: 256,
-    maxZoom: 8,
+    maxZoom: 7,
     attribution: '© USGS National Map',
     arcgisSatelliteAttribution: '© Esri, Maxar, Earthstar Geographics',
     arcgisAttribution: '© Esri',
