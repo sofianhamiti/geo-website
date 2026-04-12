@@ -18,22 +18,6 @@ import { CONFIG } from '../config';
 // ── Night style presets (for day/night cycle visualization) ───────────
 export type NightStyleKey = 'off' | 'masked';
 
-export interface NightStylePreset {
-  label: string;
-  description: string;
-}
-
-export const NIGHT_STYLE_PRESETS: Record<NightStyleKey, NightStylePreset> = {
-  off: {
-    label: 'Off',
-    description: 'No night overlay',
-  },
-  masked: {
-    label: 'Black Marble',
-    description: 'NASA city lights masked to night side',
-  },
-};
-
 // ── Terminator line (independent of night styles) ─────────────────────
 
 export function createTerminatorLayer(date: Date): Layer[] {
@@ -63,6 +47,15 @@ export function createTerminatorLayer(date: Date): Layer[] {
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
+// ── Bitmap cache — regenerate only when sun moves visibly ─────────────
+interface BitmapCache {
+  canvas: HTMLCanvasElement | null;
+  sunLon: number;
+  sunLat: number;
+}
+let bitmapCache: BitmapCache = { canvas: null, sunLon: NaN, sunLat: NaN };
+const SUN_MOVE_THRESHOLD = 0.5; // degrees — one pixel at 720px/360°
+
 function createNightGradientBitmap(date: Date, maxAlpha: number): HTMLCanvasElement {
   const width = 720;
   const height = 360;
@@ -79,11 +72,15 @@ function createNightGradientBitmap(date: Date, maxAlpha: number): HTMLCanvasElem
   const cosSunLat = Math.cos(sunLatRad);
   const sinSunLat = Math.sin(sunLatRad);
 
-  // Twilight band: 90° from subsolar (terminator) → 96° (tile mask at 84° from antisolar)
-  // 6° = civil twilight — city lights first visible from space
-  const twilightStart = 90;
-  const twilightEnd = 96;
-  const bandWidth = twilightEnd - twilightStart;
+  // Three twilight zones — each 6° with its own smoothstep
+  const civilStart = 90;      // sun hits the horizon
+  const nauticalStart = 96;   // civil → nautical
+  const astroStart = 102;     // nautical → astronomical
+  const astroEnd = 108;       // full darkness
+
+  // Alpha breakpoints at zone boundaries
+  const civilAlpha = 0.35 * maxAlpha;
+  const nauticalAlpha = 0.75 * maxAlpha;
 
   const [r, g, b] = CONFIG.styles.night.shadowColor;
 
@@ -98,11 +95,19 @@ function createNightGradientBitmap(date: Date, maxAlpha: number): HTMLCanvasElem
       const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * RAD_TO_DEG;
 
       let alpha = 0;
-      if (angleDeg > twilightStart) {
-        if (angleDeg < twilightEnd) {
-          // Smoothstep through twilight zone — zero banding
-          const t = (angleDeg - twilightStart) / bandWidth;
-          alpha = t * t * (3 - 2 * t) * maxAlpha;
+      if (angleDeg > civilStart) {
+        if (angleDeg < nauticalStart) {
+          // Civil twilight: 90–96°
+          const t = (angleDeg - civilStart) / 6;
+          alpha = t * t * (3 - 2 * t) * civilAlpha;
+        } else if (angleDeg < astroStart) {
+          // Nautical twilight: 96–102°
+          const t = (angleDeg - nauticalStart) / 6;
+          alpha = civilAlpha + t * t * (3 - 2 * t) * (nauticalAlpha - civilAlpha);
+        } else if (angleDeg < astroEnd) {
+          // Astronomical twilight: 102–108°
+          const t = (angleDeg - astroStart) / 6;
+          alpha = nauticalAlpha + t * t * (3 - 2 * t) * (maxAlpha - nauticalAlpha);
         } else {
           alpha = maxAlpha;
         }
@@ -120,9 +125,26 @@ function createNightGradientBitmap(date: Date, maxAlpha: number): HTMLCanvasElem
   return canvas;
 }
 
-// ── Tile brightness boost — per-pixel RGB multiply ───────────────────
+function getCachedNightBitmap(date: Date, maxAlpha: number): HTMLCanvasElement {
+  const [sunLon, sunLat] = getSubsolarPoint(date);
+  const dLon = sunLon - bitmapCache.sunLon;
+  const dLat = sunLat - bitmapCache.sunLat;
+  if (bitmapCache.canvas && (dLon * dLon + dLat * dLat) < SUN_MOVE_THRESHOLD * SUN_MOVE_THRESHOLD) {
+    return bitmapCache.canvas;
+  }
+  const canvas = createNightGradientBitmap(date, maxAlpha);
+  bitmapCache = { canvas, sunLon, sunLat };
+  return canvas;
+}
+
+// ── Tile brightness boost — per-pixel RGB multiply (with cache) ──────
+
+const boostedTileCache = new WeakMap<any, HTMLCanvasElement>();
 
 function boostTileBrightness(image: any, factor: number): HTMLCanvasElement {
+  const cached = boostedTileCache.get(image);
+  if (cached) return cached;
+
   const w = image.width || 256;
   const h = image.height || 256;
   const canvas = document.createElement('canvas');
@@ -138,6 +160,8 @@ function boostTileBrightness(image: any, factor: number): HTMLCanvasElement {
     data[i + 2] = Math.min(255, data[i + 2] * factor);
   }
   ctx.putImageData(imageData, 0, 0);
+
+  boostedTileCache.set(image, canvas);
   return canvas;
 }
 
@@ -147,23 +171,25 @@ function createMaskedLayers(date: Date): Layer[] {
   const layers: Layer[] = [];
 
   // Per-pixel shadow gradient — smooth transition from daylight to darkness.
-  // Replaces polygon zones for true gradient with zero banding.
+  // Three-zone twilight gradient (civil/nautical/astronomical) with caching.
   layers.push(
     new BitmapLayer({
       id: 'night-shadow-gradient',
-      image: createNightGradientBitmap(date, 0.35),
+      image: getCachedNightBitmap(date, 0.55),
       bounds: [-180, -85, 180, 85],
       opacity: 1,
       pickable: false,
       parameters: { depthTest: false },
-      updateTriggers: { image: date.getTime() },
+      updateTriggers: {
+        image: `${Math.round(bitmapCache.sunLon * 2)}_${Math.round(bitmapCache.sunLat * 2)}`,
+      },
     })
   );
 
   layers.push(
     new GeoJsonLayer({
       id: 'night-mask-polygon',
-      data: getNightPolygon(date, 84, 1),
+      data: getNightPolygon(date, 78, 1),
       operation: 'mask' as any,
       filled: true,
       stroked: false,
@@ -179,7 +205,7 @@ function createMaskedLayers(date: Date): Layer[] {
       minZoom: 0,
       maxZoom: CONFIG.styles.night.maxZoom,
       tileSize: 256,
-      opacity: 0.3,
+      opacity: 0.45,
       renderSubLayers: (props: any) => {
         const { boundingBox } = props.tile;
         const [west, south] = boundingBox[0];
@@ -187,7 +213,7 @@ function createMaskedLayers(date: Date): Layer[] {
 
         return new BitmapLayer(props, {
           data: undefined,
-          image: props.data ? boostTileBrightness(props.data, 2.0) : props.data,
+          image: props.data ? boostTileBrightness(props.data, 2.5) : props.data,
           bounds: [west, south, east, north],
           extensions: [new MaskExtension()],
           maskId: 'night-mask-polygon',

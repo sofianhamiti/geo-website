@@ -9,14 +9,14 @@ import { CONFIG } from '../config';
 import { safeAsyncOperation } from '../utils/errorHandler';
 
 // ── Earthquake animation constants ───────────────────────────────────────
-const EQ_RING_COUNT = 5;
+export const EQ_RING_COUNT = 5;
 const EQ_LINE_WIDTHS = [3.5, 3.0, 2.5, 2.0, 1.5];
 const EQ_RADIUS_MIN_PX = 4;
 const EQ_RADIUS_MAX_PX = 28;
-const EQ_PHI_EXPONENT = 0.4;
-const EQ_PHASE_SPREAD = 0.8;
-const EQ_BASE_OPACITY = 0.75;
-const EQ_OPACITY_DECAY = 0.1;
+export const EQ_PHI_EXPONENT = 0.4;
+export const EQ_PHASE_SPREAD = 0.8;
+export const EQ_BASE_OPACITY = 0.75;
+export const EQ_OPACITY_DECAY = 0.1;
 const EQ_EPICENTER_SCALE = 0.35;
 export const EQ_PULSE_DURATION_MS = 5000;
 const EQ_LINE_COLOR: [number, number, number] = [220, 30, 30];

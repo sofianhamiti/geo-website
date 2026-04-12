@@ -13,7 +13,7 @@ let hurricaneDataCache: HurricaneLayerData & { ssnumForecastPositions?: any[] } 
   error: null,
 };
 
-export class HurricaneDataManager extends BaseDataManager<HurricaneLayerData> {
+class HurricaneDataManager extends BaseDataManager<HurricaneLayerData> {
   private readonly hurricaneAPI: HurricaneAPI;
   private readonly hurricaneProcessor: HurricaneProcessor;
 

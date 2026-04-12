@@ -249,35 +249,6 @@ export function createHurricaneTooltip(hurricane: any, layerId?: string) {
 }
 
 /**
- * Hurricane track tooltip generators
- */
-export function createHurricaneObservedTrackTooltip(object: any) {
-  const content = `
-    <div style="font-weight: 600; color: #ffffff; margin-bottom: 4px;">
-      ${object.stormName} - Observed Track
-    </div>
-    <div style="color: ${COLORS.light}; font-size: 12px;">
-      Historical storm path
-    </div>
-  `;
-  
-  return createTooltipContainer(content, `rgba(59, 130, 246, 0.3)`, 'small', '200px');
-}
-
-export function createHurricaneForecastTrackTooltip(object: any) {
-  const content = `
-    <div style="font-weight: 600; color: ${COLORS.primary}; margin-bottom: 4px;">
-      ${object.stormName} - Forecast Track
-    </div>
-    <div style="color: ${COLORS.light}; font-size: 12px;">
-      Predicted storm path
-    </div>
-  `;
-  
-  return createTooltipContainer(content, `rgba(59, 130, 246, 0.3)`, 'small', '200px');
-}
-
-/**
  * Hurricane cone of uncertainty tooltip generator
  */
 export function createHurricaneConeTooltip(cone: any) {

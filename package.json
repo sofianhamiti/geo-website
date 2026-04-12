@@ -14,11 +14,11 @@
   },
   "dependencies": {
     "@deck.gl/core": "^9.1.0",
-    "@deck.gl/extensions": "^9.2.11",
+    "@deck.gl/extensions": "^9.1.14",
     "@deck.gl/geo-layers": "^9.1.14",
     "@deck.gl/layers": "^9.1.0",
     "@deck.gl/mapbox": "^9.1.0",
-    "@deck.gl/mesh-layers": "^9.2.11",
+    "@deck.gl/mesh-layers": "^9.1.14",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",

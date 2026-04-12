@@ -260,5 +260,3 @@ export class HurricaneManager {
     return hurricaneDataManager.refresh();
   }
 }
-
-export { hurricaneDataManager };

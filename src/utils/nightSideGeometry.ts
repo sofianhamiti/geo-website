@@ -189,17 +189,3 @@ export function getTerminatorLine(
   };
 }
 
-/**
- * Generate concentric shadow polygons for gradient rendering.
- * All centered on the antisolar point with radii ≤ 90°.
- * Each is converted to Mercator-compatible geometry.
- */
-export function getNightGradientZones(date: Date): Feature[] {
-  return [
-    getNightPolygon(date, 90, 1),
-    getNightPolygon(date, 80, 1),
-    getNightPolygon(date, 70, 1),
-    getNightPolygon(date, 60, 1),
-  ];
-}
-

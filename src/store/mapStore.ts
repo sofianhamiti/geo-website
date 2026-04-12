@@ -3,6 +3,9 @@ import { City, DEFAULT_CITIES, loadUserCities, saveUserCities } from '../service
 import { ISSManager } from '../layers/ISSLayer';
 import { EarthquakeManager } from '../layers/EarthquakeLayer';
 import { HurricaneManager } from '../layers/HurricaneLayer';
+import { TrueColorEarthManager } from '../layers/TrueColorEarthLayer';
+import { RainRadarManager } from '../layers/RainRadarLayer';
+import { AuroraManager } from '../layers/AuroraLayer';
 
 
 export interface MapState {
@@ -45,8 +48,26 @@ export interface MapState {
   earthquakeLastUpdate: Date | null;
   isEarthquakesLoading: boolean;
 
-  // Projection
-  projection: 'mercator' | 'globe';
+  // True-color daily Earth (NASA GIBS)
+  showTrueColorEarth: boolean;
+  trueColorEarthLayers: any[];
+  trueColorEarthManager: TrueColorEarthManager | null;
+  isTrueColorEarthLoading: boolean;
+
+  // Rain radar (RainViewer)
+  showRainRadar: boolean;
+  rainRadarLayers: any[];
+  rainRadarManager: RainRadarManager | null;
+  rainRadarLastUpdate: Date | null;
+  isRainRadarLoading: boolean;
+
+  // Aurora forecast (NOAA SWPC)
+  showAurora: boolean;
+  auroraLayers: any[];
+  auroraManager: AuroraManager | null;
+  auroraLastUpdate: Date | null;
+  isAuroraLoading: boolean;
+
 
   // Night visualization
   showNight: boolean;
@@ -84,7 +105,6 @@ export interface MapState {
   setISSLayers: (layers: any[]) => void;
   initializeISSManager: () => Promise<void>;
   destroyISSManager: () => void;
-  setISSLoading: (loading: boolean) => void;
   
   // ISS video actions
   setISSVideoVisible: (visible: boolean) => void;
@@ -96,7 +116,6 @@ export interface MapState {
   initializeHurricaneManager: () => Promise<void>;
   destroyHurricaneManager: () => void;
   setHurricaneLastUpdate: (timestamp: Date | null) => void;
-  setHurricanesLoading: (loading: boolean) => void;
   
   // Earthquake actions
   toggleEarthquakes: () => void;
@@ -104,10 +123,27 @@ export interface MapState {
   initializeEarthquakeManager: () => Promise<void>;
   destroyEarthquakeManager: () => void;
   setEarthquakeLastUpdate: (timestamp: Date | null) => void;
-  setEarthquakesLoading: (loading: boolean) => void;
 
-  setProjection: (projection: 'mercator' | 'globe') => void;
-  toggleNight: () => void;
+  // True-color Earth actions
+  toggleTrueColorEarth: () => void;
+  setTrueColorEarthLayers: (layers: any[]) => void;
+  initializeTrueColorEarthManager: () => Promise<void>;
+  destroyTrueColorEarthManager: () => void;
+
+  // Rain radar actions
+  toggleRainRadar: () => void;
+  setRainRadarLayers: (layers: any[]) => void;
+  initializeRainRadarManager: () => Promise<void>;
+  destroyRainRadarManager: () => void;
+  setRainRadarLastUpdate: (timestamp: Date | null) => void;
+
+  // Aurora actions
+  toggleAurora: () => void;
+  setAuroraLayers: (layers: any[]) => void;
+  initializeAuroraManager: () => Promise<void>;
+  destroyAuroraManager: () => void;
+  setAuroraLastUpdate: (timestamp: Date | null) => void;
+
   setNightStyle: (style: 'off' | 'masked') => void;
 
   // Timezone actions
@@ -147,8 +183,20 @@ export const useMapStore = create<MapState>((set, get) => ({
   earthquakeManager: null,
   earthquakeLastUpdate: null,
   isEarthquakesLoading: false,
-  earthquakeStyle: 'current' as 'current' | 'A' | 'B' | 'C',
-  projection: 'mercator' as 'mercator' | 'globe',
+  showTrueColorEarth: false,
+  trueColorEarthLayers: [],
+  trueColorEarthManager: null,
+  isTrueColorEarthLoading: false,
+  showRainRadar: false,
+  rainRadarLayers: [],
+  rainRadarManager: null,
+  rainRadarLastUpdate: null,
+  isRainRadarLoading: false,
+  showAurora: false,
+  auroraLayers: [],
+  auroraManager: null,
+  auroraLastUpdate: null,
+  isAuroraLoading: false,
   showNight: false,
   nightStyle: 'off' as 'off' | 'masked',
   timezoneLayers: [],
@@ -236,19 +284,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   // ISS actions
   toggleISS: () => {
-    const currentState = get().showISS;
-    const newState = !currentState;
-    
-    if (!newState) {
-      // If disabling ISS, cleanup manager
-      const { issManager } = get();
-      if (issManager) {
-        issManager.destroy();
-        set({ issManager: null, issLayers: [] });
-      }
-    }
-    
-    set({ showISS: newState });
+    set({ showISS: !get().showISS });
   },
 
   setISSLayers: (layers) => {
@@ -273,12 +309,8 @@ export const useMapStore = create<MapState>((set, get) => ({
     const { issManager } = get();
     if (issManager) {
       issManager.destroy();
-      set({ issManager: null, issLayers: [], showISS: false });
+      set({ issManager: null, issLayers: [] });
     }
-  },
-
-  setISSLoading: (loading) => {
-    set({ isISSLoading: loading });
   },
 
   setISSVideoVisible: (visible) => {
@@ -291,19 +323,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   // Hurricane actions
   toggleHurricanes: () => {
-    const currentState = get().showHurricanes;
-    const newState = !currentState;
-    
-    if (!newState) {
-      // If disabling hurricanes, cleanup manager
-      const { hurricaneManager } = get();
-      if (hurricaneManager) {
-        hurricaneManager.stop();
-        set({ hurricaneManager: null, hurricaneLayers: [] });
-      }
-    }
-    
-    set({ showHurricanes: newState });
+    set({ showHurricanes: !get().showHurricanes });
   },
 
   setHurricaneLayers: (layers) => {
@@ -331,7 +351,7 @@ export const useMapStore = create<MapState>((set, get) => ({
     const { hurricaneManager } = get();
     if (hurricaneManager) {
       hurricaneManager.stop();
-      set({ hurricaneManager: null, hurricaneLayers: [], showHurricanes: false });
+      set({ hurricaneManager: null, hurricaneLayers: [] });
     }
   },
 
@@ -339,25 +359,9 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ hurricaneLastUpdate: timestamp });
   },
 
-  setHurricanesLoading: (loading) => {
-    set({ isHurricanesLoading: loading });
-  },
-
   // Earthquake actions
   toggleEarthquakes: () => {
-    const currentState = get().showEarthquakes;
-    const newState = !currentState;
-    
-    if (!newState) {
-      // If disabling earthquakes, cleanup manager
-      const { earthquakeManager } = get();
-      if (earthquakeManager) {
-        earthquakeManager.destroy();
-        set({ earthquakeManager: null, earthquakeLayers: [] });
-      }
-    }
-    
-    set({ showEarthquakes: newState });
+    set({ showEarthquakes: !get().showEarthquakes });
   },
 
   setEarthquakeLayers: (layers) => {
@@ -382,7 +386,7 @@ export const useMapStore = create<MapState>((set, get) => ({
     const { earthquakeManager } = get();
     if (earthquakeManager) {
       earthquakeManager.destroy();
-      set({ earthquakeManager: null, earthquakeLayers: [], showEarthquakes: false });
+      set({ earthquakeManager: null, earthquakeLayers: [] });
     }
   },
 
@@ -390,13 +394,93 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ earthquakeLastUpdate: timestamp });
   },
 
-  setEarthquakesLoading: (loading) => {
-    set({ isEarthquakesLoading: loading });
+  // True-color Earth actions
+  toggleTrueColorEarth: () => {
+    set({ showTrueColorEarth: !get().showTrueColorEarth });
   },
 
-  setProjection: (projection) => set({ projection }),
+  setTrueColorEarthLayers: (layers) => set({ trueColorEarthLayers: layers }),
 
-  toggleNight: () => set({ showNight: !get().showNight }),
+  initializeTrueColorEarthManager: async () => {
+    const { trueColorEarthManager } = get();
+    if (trueColorEarthManager) return;
+    try {
+      set({ isTrueColorEarthLoading: true });
+      const manager = new TrueColorEarthManager();
+      await manager.initialize();
+      set({ trueColorEarthManager: manager, isTrueColorEarthLoading: false });
+    } catch {
+      set({ isTrueColorEarthLoading: false });
+    }
+  },
+
+  destroyTrueColorEarthManager: () => {
+    const { trueColorEarthManager } = get();
+    if (trueColorEarthManager) {
+      trueColorEarthManager.destroy();
+      set({ trueColorEarthManager: null, trueColorEarthLayers: [] });
+    }
+  },
+
+  // Rain radar actions
+  toggleRainRadar: () => {
+    set({ showRainRadar: !get().showRainRadar });
+  },
+
+  setRainRadarLayers: (layers) => set({ rainRadarLayers: layers }),
+
+  initializeRainRadarManager: async () => {
+    const { rainRadarManager } = get();
+    if (rainRadarManager) return;
+    try {
+      set({ isRainRadarLoading: true });
+      const manager = new RainRadarManager();
+      await manager.initialize();
+      set({ rainRadarManager: manager, isRainRadarLoading: false });
+    } catch {
+      set({ isRainRadarLoading: false });
+    }
+  },
+
+  destroyRainRadarManager: () => {
+    const { rainRadarManager } = get();
+    if (rainRadarManager) {
+      rainRadarManager.destroy();
+      set({ rainRadarManager: null, rainRadarLayers: [] });
+    }
+  },
+
+  setRainRadarLastUpdate: (timestamp) => set({ rainRadarLastUpdate: timestamp }),
+
+  // Aurora actions
+  toggleAurora: () => {
+    set({ showAurora: !get().showAurora });
+  },
+
+  setAuroraLayers: (layers) => set({ auroraLayers: layers }),
+
+  initializeAuroraManager: async () => {
+    const { auroraManager } = get();
+    if (auroraManager) return;
+    try {
+      set({ isAuroraLoading: true });
+      const manager = new AuroraManager();
+      await manager.initialize();
+      set({ auroraManager: manager, isAuroraLoading: false });
+    } catch {
+      set({ isAuroraLoading: false });
+    }
+  },
+
+  destroyAuroraManager: () => {
+    const { auroraManager } = get();
+    if (auroraManager) {
+      auroraManager.destroy();
+      set({ auroraManager: null, auroraLayers: [] });
+    }
+  },
+
+  setAuroraLastUpdate: (timestamp) => set({ auroraLastUpdate: timestamp }),
 
   setNightStyle: (style) => {
     set({

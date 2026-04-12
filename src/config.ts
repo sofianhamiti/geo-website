@@ -11,7 +11,6 @@ export const CONFIG = {
       min: 1,
       max: 8,
     },
-    projection: 'mercator' as const,
   },
 
   // Data sources - raster tile services only for optimal performance
@@ -35,7 +34,6 @@ export const CONFIG = {
       tileUrl:
         'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
       maxZoom: 8,
-      tileOpacity: 0.85,
 
       // Shadow overlay color (dark blue-black)
       shadowColor: [5, 5, 25, 255] as [number, number, number, number],
@@ -63,7 +61,6 @@ export const CONFIG = {
       lineHeight: 1.2,
       borderRadius: 6,
       padding: [12, 6, 12, 6] as [number, number, number, number],
-      minZoom: 2,
 
       // Collision detection parameters
       collision: {
@@ -82,17 +79,7 @@ export const CONFIG = {
       },
     },
     mountains: {
-      // Clean cartographic mountain styling - Enhanced bright gold theme
       minZoom: 2, // Show mountains at zoom level 2 and above
-      symbolColor: [255, 215, 0, 255] as [number, number, number, number], // Bright gold for maximum pop
-      labelColor: [255, 140, 66, 255] as [number, number, number, number], // Warm orange for labels
-      symbolSize: 6, // Increased base symbol size for better visibility
-      labelSize: 12, // Slightly larger text size for better readability
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-      fontWeight: 'bold' as const,
-      outlineColor: [25, 35, 50, 180] as [number, number, number, number], // Dark outline for better contrast
-      outlineWidth: 2,
-      spacingOffset: 0.2, // Vertical spacing between symbol and label
     },
     iss: {
       // Livestream Configuration
@@ -104,9 +91,9 @@ export const CONFIG = {
       // API Configuration
       satelliteId: 25544, // ISS NORAD ID
       apiBaseUrl: 'https://api.wheretheiss.at/v1/satellites/',
-      trajectoryDurationMinutes: 90, // 120 minutes ahead
+      trajectoryDurationMinutes: 90, // 90 minutes ahead
       trajectoryPointIntervalSeconds: 120, // 2 minutes between trajectory points
-      updateIntervalMs: 10000, // 30 seconds between updates
+      updateIntervalMs: 10000, // 10 seconds between updates
 
       // Icon Configuration
       icon: {
@@ -119,18 +106,11 @@ export const CONFIG = {
 
       // Visual styling
       iconSize: 56, // Space station icon size
-      iconColor: [255, 245, 140, 255] as [number, number, number, number], // Yellow color scheme to match icon
 
       // Trajectory styling
       trajectoryColor: [157, 212, 224, 200] as [number, number, number, number], // Light blue to match ISS icon color (#9dd4e0)
       trajectoryWidth: 1,
       trajectoryOpacity: 0.2,
-
-      // Information label styling
-      labelSize: 12,
-      labelColor: [255, 255, 255, 255] as [number, number, number, number], // White text
-      backgroundColor: [15, 23, 42, 220] as [number, number, number, number], // Dark background
-      borderColor: [255, 245, 140, 80] as [number, number, number, number], // Yellow border to match theme
 
       // Error display styling
       errorTextSize: 16,
@@ -148,101 +128,16 @@ export const CONFIG = {
       endpoint: 'all_day.geojson', // Past 24 hours, all magnitudes
       updateIntervalMs: 3600000, // 1 hour (60 * 60 * 1000)
 
-      // Icon Configuration
-      icon: {
-        svgData: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-              <!-- Center epicenter dot (solid red) -->
-              <circle cx="64" cy="64" r="6" fill="#ff0000"/>
-              
-              <!-- Inner ring (full opacity) -->
-              <circle cx="64" cy="64" r="16" fill="none" stroke="#ff0000" stroke-width="3"/>
-              
-              <!-- Middle ring (medium opacity) -->
-              <circle cx="64" cy="64" r="28" fill="none" stroke="#ff0000" stroke-width="2" opacity="0.8"/>
-              
-              <!-- Outer ring (reduced opacity) -->
-              <circle cx="64" cy="64" r="42" fill="none" stroke="#ff0000" stroke-width="2" opacity="0.55"/>
-              
-              <!-- Outermost ring (lowest opacity) -->
-              <circle cx="64" cy="64" r="58" fill="none" stroke="#ff0000" stroke-width="1.5" opacity="0.36"/>
-          </svg>`,
-        width: 128,
-        height: 128,
-        anchorX: 64,
-        anchorY: 64,
-      },
-
-      // Size calculation parameters
-      sizeMultiplier: 0.5, // Main scaling factor (reduced from 0.8)
-      magnitudeScaling: {
-        baseMultiplier: 1,    // Base multiplier (the "1" in "1 + magnitude")  
-        magnitudeWeight: 2,   // How much magnitude affects size (the magnitude part)
-      },
-
-      // Icon display parameters
-      iconDisplay: {
-        sizeScale: 1,
-        alphaCutoff: -1, // Include all pixels for picking
-      },
-
       // Level-of-detail filtering
       lodFiltering: {
         enabled: true,
         zoomBreakpoints: {
           2: 4.5,  // At zoom 2, show only M4.5+ (significantThreshold)
-          4: 2.0,  // At zoom 4, show M2.0+  
+          4: 2.0,  // At zoom 4, show M2.0+
           6: 1.0,  // At zoom 6, show M1.0+
           // Above zoom 6: show all earthquakes
         }
       },
-
-      // Magnitude-based styling system
-      magnitudeColors: {
-        9: [139, 0, 0, 255] as [number, number, number, number],     // Dark red - Extreme (9.0+)
-        8: [255, 0, 0, 255] as [number, number, number, number],     // Red - Great (8.0-8.9)
-        7: [255, 69, 0, 255] as [number, number, number, number],    // Orange-red - Major (7.0-7.9)
-        6: [255, 140, 0, 255] as [number, number, number, number],   // Orange - Strong (6.0-6.9)
-        5: [255, 215, 0, 255] as [number, number, number, number],   // Gold - Moderate (5.0-5.9)
-        4: [255, 255, 0, 255] as [number, number, number, number],   // Yellow - Light (4.0-4.9)
-        3: [173, 255, 47, 255] as [number, number, number, number],  // Green-yellow - Minor (3.0-3.9)
-        2: [0, 255, 127, 255] as [number, number, number, number],   // Spring green - Very minor (2.0-2.9)
-        1: [135, 206, 235, 255] as [number, number, number, number], // Sky blue - Micro (1.0-1.9)
-        0: [176, 196, 222, 255] as [number, number, number, number]  // Light steel blue - Very micro (<1.0)
-      },
-
-      // Size scaling based on magnitude
-      magnitudeSizes: {
-        9: 20, // Extreme events
-        8: 18, // Great earthquakes
-        7: 16, // Major earthquakes
-        6: 14, // Strong earthquakes
-        5: 12, // Moderate earthquakes
-        4: 10, // Light earthquakes
-        3: 8,  // Minor earthquakes
-        2: 6,  // Very minor
-        1: 5,  // Micro
-        0: 4   // Very micro
-      },
-
-      // Depth-based opacity (shallow = more visible)
-      depthOpacity: {
-        shallow: 255,    // 0-70km depth
-        intermediate: 200, // 70-300km depth
-        deep: 150        // 300km+ depth
-      },
-
-      // Visual styling
-      strokeColor: [255, 255, 255, 200] as [number, number, number, number],
-      strokeWidth: 1,
-      radiusMinPixels: 4,
-      radiusMaxPixels: 30,
-
-      // Label styling (for significant earthquakes M4.5+)
-      labelMinMagnitude: 4.5,
-      labelSize: 11,
-      labelColor: [255, 255, 255, 255] as [number, number, number, number],
-      labelBackgroundColor: [15, 23, 42, 220] as [number, number, number, number],
-      labelBorderColor: [255, 140, 0, 80] as [number, number, number, number],
 
       // Error display styling
       errorTextSize: 16,
@@ -252,7 +147,6 @@ export const CONFIG = {
 
       // Filtering options
       minMagnitudeDisplay: 4.5, // Show M4.5+ earthquakes
-      maxAge: 24, // Hours - matches API endpoint
 
       // Performance settings
       maxEarthquakes: 1000, // Limit for performance
@@ -266,50 +160,43 @@ export const CONFIG = {
       serviceUrl: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Time_Zones/FeatureServer',
 
       // Visual styling
-      strokeColor: [255, 255, 255, 100] as [number, number, number, number], // White borders with low opacity
       strokeWidth: 1,
-      fillOpacity: 0.3, // Semi-transparent fills so you can see basemap underneath
-
-      // UTC offset-based color mapping
-      offsetColors: {
-        // Western hemisphere - blue spectrum
-        [-12]: [30, 60, 150, 76] as [number, number, number, number],   // Deep blue UTC-12
-        [-11]: [40, 80, 170, 76] as [number, number, number, number],   // UTC-11
-        [-10]: [50, 100, 190, 76] as [number, number, number, number],  // UTC-10
-        [-9]: [60, 120, 210, 76] as [number, number, number, number],   // UTC-9
-        [-8]: [70, 140, 230, 76] as [number, number, number, number],   // UTC-8 Pacific
-        [-7]: [80, 160, 250, 76] as [number, number, number, number],   // UTC-7 Mountain
-        [-6]: [90, 180, 255, 76] as [number, number, number, number],   // UTC-6 Central
-        [-5]: [100, 200, 255, 76] as [number, number, number, number],  // UTC-5 Eastern
-        [-4]: [120, 210, 255, 76] as [number, number, number, number],  // UTC-4 Atlantic
-        [-3]: [140, 220, 255, 76] as [number, number, number, number],  // UTC-3
-        [-2]: [160, 230, 255, 76] as [number, number, number, number],  // UTC-2
-        [-1]: [180, 240, 255, 76] as [number, number, number, number],  // UTC-1
-
-        // UTC/GMT - neutral green
-        [0]: [100, 200, 100, 76] as [number, number, number, number],   // UTC Greenwich
-
-        // Eastern hemisphere - red/orange spectrum
-        [1]: [255, 240, 180, 76] as [number, number, number, number],   // UTC+1 Central Europe
-        [2]: [255, 230, 160, 76] as [number, number, number, number],   // UTC+2 Eastern Europe
-        [3]: [255, 220, 140, 76] as [number, number, number, number],   // UTC+3 Moscow
-        [4]: [255, 210, 120, 76] as [number, number, number, number],   // UTC+4
-        [5]: [255, 200, 100, 76] as [number, number, number, number],   // UTC+5
-        [6]: [255, 190, 80, 76] as [number, number, number, number],    // UTC+6
-        [7]: [255, 180, 60, 76] as [number, number, number, number],    // UTC+7
-        [8]: [255, 170, 50, 76] as [number, number, number, number],    // UTC+8 China/Australia
-        [9]: [255, 160, 40, 76] as [number, number, number, number],    // UTC+9 Japan
-        [10]: [255, 150, 30, 76] as [number, number, number, number],   // UTC+10 Australia East
-        [11]: [255, 140, 20, 76] as [number, number, number, number],   // UTC+11
-        [12]: [255, 130, 10, 76] as [number, number, number, number],   // UTC+12 New Zealand
-        [13]: [250, 120, 0, 76] as [number, number, number, number],    // UTC+13
-        [14]: [240, 110, 0, 76] as [number, number, number, number],    // UTC+14
-      },
-
-      // Hover/selection effects
-      highlightColor: [255, 255, 0, 150] as [number, number, number, number], // Yellow highlight
-      highlightStrokeWidth: 3,
     },
+  },
+
+  // True-color daily Earth (NASA GIBS VIIRS)
+  trueColorEarth: {
+    tileUrlTemplate:
+      'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg',
+    maxZoom: 9,
+    tileSize: 256,
+    opacity: 0.85,
+    updateIntervalMs: 3600000, // re-check date availability hourly
+  },
+
+  // Rain radar (RainViewer)
+  rainRadar: {
+    manifestUrl: 'https://api.rainviewer.com/public/weather-maps.json',
+    tileSize: 256,
+    opacity: 0.6,
+    maxZoom: 7,
+    updateIntervalMs: 600000, // re-fetch manifest every 10 min
+    animationIntervalMs: 500, // advance frame every 500ms
+  },
+
+  // Aurora forecast (NOAA SWPC OVATION)
+  aurora: {
+    apiUrl: 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json',
+    updateIntervalMs: 1800000, // every 30 min
+    opacity: 0.7,
+    // Color gradient: probability mapped to green aurora glow
+    colors: {
+      low: [0, 255, 100, 60] as [number, number, number, number],      // faint green glow
+      mid: [0, 255, 100, 160] as [number, number, number, number],     // green glow
+      high: [100, 255, 180, 220] as [number, number, number, number],  // bright green
+      peak: [200, 255, 230, 250] as [number, number, number, number],  // green-white
+    },
+    minProbability: 3, // show even faint aurora
   },
 
   // Weather settings
@@ -337,39 +224,9 @@ export const CONFIG = {
 
       // Visual Parameters - refined to match zoom.earth's clean professional style
       visualParams: {
-        // Track line widths - thinner and more refined
-        historicalTrackWidth: 2.5,         // Clean, professional width
-        forecastTrackWidth: 3,              // Slightly thicker for emphasis
-        coneStrokeWidth: 1,                 // Barely visible stroke
-
-        // Icon sizing parameters - cleaner, more professional
-        baseIconSize: 20,                   // Smaller base size
-        currentPositionMultiplier: 1.8,     // Less dramatic scaling
-        historicalDotRadius: 8,             // Larger for easier hover targeting
-        forecastDotRadius: 7,               // Larger for easier hover targeting
-
-        // Professional subtle stroke colors matching Zoom.Earth's actual implementation
-        coneStrokeColor: [255, 255, 255, 25] as [number, number, number, number],  // Nearly invisible stroke
-        historicalDotStroke: [255, 255, 255, 150] as [number, number, number, number],
-        forecastDotStroke: [255, 255, 255, 80] as [number, number, number, number],
-      },
-
-      // Hurricane SVG Icon Template - optimized for ocean visibility
-      iconTemplate: {
-        svgContent: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-    <!-- Center circle -->
-    <circle cx="64" cy="64" r="22" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
-    
-    <!-- Upper sweep line -->
-    <path d="M50 29.2l-1 1.9A67.4 67.4 0 0 0 42.2 66.8" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
-    
-    <!-- Lower sweep line -->
-    <path d="M78 98.8l1-1.9A67.4 67.4 0 0 0 85.8 61.2" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
-</svg>` as const,
-        width: 128,
-        height: 128,
-        anchorX: 64,
-        anchorY: 64,
+        coneStrokeWidth: 1,
+        forecastDotRadius: 7,
+        coneStrokeColor: [255, 255, 255, 25] as [number, number, number, number],
       },
 
       // Saffir-Simpson category colors - matched to Zoom.Earth's exact color scheme
@@ -387,7 +244,6 @@ export const CONFIG = {
   // Application behavior
   app: {
     updateFrequency: 10000, // 10 seconds
-    loadingTransitionDelay: 0,
   },
 
   // Layer and source IDs
@@ -406,6 +262,9 @@ export const CONFIG = {
     earthquakePositions: 'earthquake-positions',
     earthquakeLabels: 'earthquake-labels',
     timezones: 'deck-gl-timezones',
+    trueColorEarth: 'true-color-earth-tiles',
+    rainRadar: 'rain-radar-tiles',
+    aurora: 'aurora-forecast',
   },
 
   sourceIds: {
@@ -415,5 +274,3 @@ export const CONFIG = {
     arcgisPlaces: 'arcgis-places',
   },
 } as const;
-
-export type Config = typeof CONFIG;

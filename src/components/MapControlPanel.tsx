@@ -9,7 +9,7 @@
 import React from 'react';
 import {
   Globe, SunMoon, Radio, MapPin, Clock4, Mountain, Star,
-  Building2, Activity, Wind, X, RefreshCw,
+  Building2, Activity, Wind, RefreshCw, CloudRain, Satellite, Sparkles,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -35,6 +35,14 @@ interface MapControlPanelProps {
   earthquakeLastUpdate: Date | null;
   hurricaneLastUpdate: Date | null;
   hurricaneLayerCount: number;
+  showTrueColorEarth: boolean;
+  isTrueColorEarthLoading: boolean;
+  showRainRadar: boolean;
+  isRainRadarLoading: boolean;
+  rainRadarLastUpdate: Date | null;
+  showAurora: boolean;
+  isAuroraLoading: boolean;
+  auroraLastUpdate: Date | null;
   currentTime: Date;
   onToggleMenu: () => void;
   onSetSelectedBasemap: (basemap: 'usgs' | 'arcgis' | 'eox') => void;
@@ -47,10 +55,11 @@ interface MapControlPanelProps {
   onToggleISS: () => void;
   onToggleEarthquakes: () => void;
   onToggleHurricanes: () => void;
+  onToggleTrueColorEarth: () => void;
+  onToggleRainRadar: () => void;
+  onToggleAurora: () => void;
   nightStyle: NightStyleKey;
   onSetNightStyle: (style: NightStyleKey) => void;
-  isGlobe: boolean;
-  onToggleProjection: () => void;
 }
 
 /* ── Reusable small components ──────────────────────────────── */
@@ -134,6 +143,14 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   earthquakeLastUpdate,
   hurricaneLastUpdate,
   hurricaneLayerCount,
+  showTrueColorEarth,
+  isTrueColorEarthLoading,
+  showRainRadar,
+  isRainRadarLoading,
+  rainRadarLastUpdate,
+  showAurora,
+  isAuroraLoading,
+  auroraLastUpdate,
   currentTime,
   onToggleMenu,
   onSetSelectedBasemap,
@@ -146,10 +163,11 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
   onToggleISS,
   onToggleEarthquakes,
   onToggleHurricanes,
+  onToggleTrueColorEarth,
+  onToggleRainRadar,
+  onToggleAurora,
   nightStyle,
   onSetNightStyle,
-  isGlobe,
-  onToggleProjection,
 }) => {
   const basemaps: { key: 'usgs' | 'arcgis' | 'eox'; name: string; icon: React.ReactNode }[] = [
     { key: 'eox', name: 'Sentinel-2 Cloudless', icon: <Star className="w-5 h-5 text-amber-400" /> },
@@ -181,14 +199,8 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
         isMenuOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {/* Header — 34px vertical padding */}
-        <div className="flex items-center justify-between px-8 py-6 shrink-0">
+        <div className="flex items-center px-8 py-6 shrink-0">
           <h2 className="text-lg font-semibold text-blue-100">Map Controls</h2>
-          <button
-            onClick={onToggleMenu}
-            className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
-          >
-            <X className="w-4 h-4 text-slate-400" />
-          </button>
         </div>
 
         {/* Tabbed Content */}
@@ -214,12 +226,6 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
           <TabsContent value="map" className="flex-1">
             <ScrollArea className="h-full">
               <div className="p-8 space-y-8">
-                {/* Projection */}
-                <div className="space-y-1">
-                  <SectionLabel>Projection</SectionLabel>
-                  <LayerRow icon={<Globe className="w-[18px] h-[18px] text-teal-400" />} name="3D Globe" enabled={isGlobe} onToggle={onToggleProjection} />
-                </div>
-
                 {/* Basemap */}
                 <div className="space-y-3">
                   <SectionLabel>Basemap</SectionLabel>
@@ -319,6 +325,19 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
                   lastUpdate={hurricaneLastUpdate}
                   source={hurricaneLayerCount > 0 ? 'NHC/JTWC' : undefined}
                 />
+
+                <div className="pt-3">
+                  <SectionLabel>Earth Observation</SectionLabel>
+                </div>
+
+                <LayerRow icon={<Satellite className="w-[18px] h-[18px] text-cyan-400" />} name="True-Color Earth" enabled={showTrueColorEarth} loading={isTrueColorEarthLoading} onToggle={onToggleTrueColorEarth} meta="daily" />
+                <UpdateMeta freq="Daily" source="NASA GIBS VIIRS" />
+
+                <LayerRow icon={<CloudRain className="w-[18px] h-[18px] text-blue-400" />} name="Rain Radar" enabled={showRainRadar} loading={isRainRadarLoading} onToggle={onToggleRainRadar} meta="10m" />
+                <UpdateMeta freq="Every 10m" lastUpdate={rainRadarLastUpdate} source="RainViewer" />
+
+                <LayerRow icon={<Sparkles className="w-[18px] h-[18px] text-green-400" />} name="Aurora Forecast" enabled={showAurora} loading={isAuroraLoading} onToggle={onToggleAurora} meta="30m" />
+                <UpdateMeta freq="Every 30m" lastUpdate={auroraLastUpdate} source="NOAA SWPC" />
 
                 {/* City Manager */}
                 <div className="pt-5">

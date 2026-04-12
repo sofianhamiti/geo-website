@@ -7,36 +7,53 @@ import { useState } from 'react';
 import { useMapStore } from '../store/mapStore';
 import { City } from '../services/simpleCityService';
 
+// Lookup IANA timezone from coordinates using TimeAPI (no API key needed)
+async function lookupTimezone(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://timeapi.io/api/timezone/coordinate?latitude=${lat}&longitude=${lng}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.timeZone) return data.timeZone;
+    }
+  } catch {
+    // fall through to fallback
+  }
+  // Fallback: rough longitude estimate (no DST, but better than nothing)
+  const offsetHours = Math.round(lng / 15);
+  const utcOffset = Math.max(-12, Math.min(12, offsetHours));
+  return utcOffset >= 0 ? `Etc/GMT-${utcOffset}` : `Etc/GMT+${Math.abs(utcOffset)}`;
+}
+
 // Simple geocoding function using OpenStreetMap Nominatim
 async function geocodeCity(cityName: string): Promise<City | null> {
   try {
     const encodedCity = encodeURIComponent(cityName.trim());
     const url = `https://nominatim.openstreetmap.org/search?q=${encodedCity}&format=json&limit=1&addressdetails=1`;
-    
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'CityTimesApp/1.0',
       },
     });
-    
+
     if (!response.ok) return null;
-    
+
     const data = await response.json();
     if (!data || data.length === 0) return null;
-    
+
     const result = data[0];
     const lng = parseFloat(result.lon);
     const lat = parseFloat(result.lat);
     const address = result.address || {};
-    
+
     const city = address.city || address.town || address.village || cityName;
     const country = address.country || 'Unknown';
-    
-    // Simple timezone estimation based on longitude
-    const offsetHours = Math.round(lng / 15);
-    const utcOffset = Math.max(-12, Math.min(12, offsetHours));
-    const timezone = utcOffset >= 0 ? `Etc/GMT-${utcOffset}` : `Etc/GMT+${Math.abs(utcOffset)}`;
-    
+
+    // Look up proper IANA timezone from coordinates
+    const timezone = await lookupTimezone(lat, lng);
+
     return {
       id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: city,
@@ -44,7 +61,7 @@ async function geocodeCity(cityName: string): Promise<City | null> {
       coordinates: [lng, lat],
       timezone: timezone,
     };
-    
+
   } catch (error) {
     return null;
   }

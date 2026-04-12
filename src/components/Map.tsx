@@ -39,11 +39,24 @@ const Map: React.FC = () => {
     earthquakeLastUpdate,
     isEarthquakesLoading,
     nightStyle,
-    projection,
     timezoneLayers,
     isMenuOpen,
     currentTime,
     cities,
+    showTrueColorEarth,
+    trueColorEarthLayers,
+    trueColorEarthManager,
+    isTrueColorEarthLoading,
+    showRainRadar,
+    rainRadarLayers,
+    rainRadarManager,
+    rainRadarLastUpdate,
+    isRainRadarLoading,
+    showAurora,
+    auroraLayers,
+    auroraManager,
+    auroraLastUpdate,
+    isAuroraLoading,
     setMap,
     setMapLoaded,
     setSelectedBasemap,
@@ -64,8 +77,21 @@ const Map: React.FC = () => {
     setEarthquakeLayers,
     setEarthquakeLastUpdate,
     setNightStyle,
-    setProjection,
     setTimezoneLayers,
+    toggleTrueColorEarth,
+    setTrueColorEarthLayers,
+    initializeTrueColorEarthManager,
+    destroyTrueColorEarthManager,
+    toggleRainRadar,
+    setRainRadarLayers,
+    setRainRadarLastUpdate,
+    initializeRainRadarManager,
+    destroyRainRadarManager,
+    toggleAurora,
+    setAuroraLayers,
+    setAuroraLastUpdate,
+    initializeAuroraManager,
+    destroyAuroraManager,
     initializeISSManager,
     destroyISSManager,
     initializeHurricaneManager,
@@ -93,9 +119,15 @@ const Map: React.FC = () => {
       showHurricanes,
       showEarthquakes,
       showTimezones,
+      showTrueColorEarth,
+      showRainRadar,
+      showAurora,
       issManager,
       hurricaneManager,
       earthquakeManager,
+      trueColorEarthManager,
+      rainRadarManager,
+      auroraManager,
     },
     {
       initializeISSManager,
@@ -104,12 +136,23 @@ const Map: React.FC = () => {
       destroyHurricaneManager,
       initializeEarthquakeManager,
       destroyEarthquakeManager,
+      initializeTrueColorEarthManager,
+      destroyTrueColorEarthManager,
+      initializeRainRadarManager,
+      destroyRainRadarManager,
+      initializeAuroraManager,
+      destroyAuroraManager,
       setISSLayers,
       setHurricaneLayers,
       setEarthquakeLayers,
       setTimezoneLayers,
+      setTrueColorEarthLayers,
+      setRainRadarLayers,
+      setAuroraLayers,
       setHurricaneLastUpdate,
       setEarthquakeLastUpdate,
+      setRainRadarLastUpdate,
+      setAuroraLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -128,6 +171,9 @@ const Map: React.FC = () => {
       showISS,
       showHurricanes,
       showEarthquakes,
+      showTrueColorEarth,
+      showRainRadar,
+      showAurora,
       nightStyle,
     },
     {
@@ -135,8 +181,13 @@ const Map: React.FC = () => {
       hurricaneLayers,
       earthquakeLayers,
       timezoneLayers,
+      trueColorEarthLayers,
+      rainRadarLayers,
+      auroraLayers,
       hurricaneLastUpdate,
       earthquakeLastUpdate,
+      rainRadarLastUpdate,
+      auroraLastUpdate,
     },
     currentTime,
     currentZoom,
@@ -154,15 +205,31 @@ const Map: React.FC = () => {
   // Update deck.gl overlay with new layers
   useEffect(() => {
     if (map && (map as any)._deckOverlay) {
-      // Sync hurricane icon angle from performance.now() so React re-renders
-      // don't flash a stale angle before the animation loop corrects it
+      const overlay = (map as any)._deckOverlay;
+
+      // Preserve animation-driven state so React re-renders don't flash stale values
       const hcAngle = (performance.now() * 360 / 10000) % 360;
-      const synced = layers.map((layer: any) =>
-        layer.id === 'hurricane-positions'
-          ? layer.clone({ getAngle: hcAngle })
-          : layer
-      );
-      (map as any)._deckOverlay.setProps({ layers: synced });
+
+      // Get current rain radar opacities from the overlay (set by animation loop)
+      const currentOverlayLayers: any[] = overlay._props?.layers || [];
+      const rrOpacityMap: Record<string, number> = {};
+      for (const l of currentOverlayLayers) {
+        if (l.id?.startsWith('rain-radar-tiles-')) {
+          rrOpacityMap[l.id] = l.props?.opacity ?? 0;
+        }
+      }
+
+      const synced = layers.map((layer: any) => {
+        if (layer.id === 'hurricane-positions') {
+          return layer.clone({ getAngle: hcAngle });
+        }
+        // Preserve rain radar frame opacities from animation loop
+        if (layer.id?.startsWith('rain-radar-tiles-') && layer.id in rrOpacityMap) {
+          return layer.clone({ opacity: rrOpacityMap[layer.id] });
+        }
+        return layer;
+      });
+      overlay.setProps({ layers: synced });
     }
   }, [layers, map]);
 
@@ -195,25 +262,6 @@ const Map: React.FC = () => {
     map.on('zoomend', handleZoomEnd);
     return () => map.off('zoomend', handleZoomEnd);
   }, [map]);
-
-  // Projection switching (2D ↔ 3D globe)
-  useEffect(() => {
-    if (!map) return;
-
-    map.setProjection({ type: projection });
-
-    if (projection === 'globe') {
-      map.setMinZoom(0);
-      map.dragRotate.enable();
-      map.touchZoomRotate.enable();
-    } else {
-      map.setMinZoom(CONFIG.map.zoom.min);
-      map.dragRotate.disable();
-      map.touchZoomRotate.disable();
-      map.setBearing(0);
-      map.setPitch(0);
-    }
-  }, [map, projection]);
 
   return (
     <div className="relative w-full h-screen">
@@ -248,6 +296,14 @@ const Map: React.FC = () => {
         earthquakeLastUpdate={earthquakeLastUpdate}
         hurricaneLastUpdate={hurricaneLastUpdate}
         hurricaneLayerCount={hurricaneLayers.length}
+        showTrueColorEarth={showTrueColorEarth}
+        isTrueColorEarthLoading={isTrueColorEarthLoading}
+        showRainRadar={showRainRadar}
+        isRainRadarLoading={isRainRadarLoading}
+        rainRadarLastUpdate={rainRadarLastUpdate}
+        showAurora={showAurora}
+        isAuroraLoading={isAuroraLoading}
+        auroraLastUpdate={auroraLastUpdate}
         currentTime={currentTime}
         onToggleMenu={toggleMenu}
         onSetSelectedBasemap={setSelectedBasemap}
@@ -260,22 +316,23 @@ const Map: React.FC = () => {
         onToggleISS={toggleISS}
         onToggleEarthquakes={toggleEarthquakes}
         onToggleHurricanes={toggleHurricanes}
+        onToggleTrueColorEarth={toggleTrueColorEarth}
+        onToggleRainRadar={toggleRainRadar}
+        onToggleAurora={toggleAurora}
         nightStyle={nightStyle}
         onSetNightStyle={setNightStyle}
-        isGlobe={projection === 'globe'}
-        onToggleProjection={() => setProjection(projection === 'globe' ? 'mercator' : 'globe')}
       />
 
       {/* Date/Time Display */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 p-4">
-        <div className="text-blue-100 text-xl font-bold tracking-wide antialiased text-center">
+      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30">
+        <div className="text-blue-100/60 text-sm font-medium tracking-wide antialiased text-center">
           {displayTime.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric'
           })}
         </div>
-        <div className="text-blue-100 font-sans text-2xl font-bold tracking-wider antialiased text-center">
+        <div className="text-blue-100 text-3xl font-bold tracking-widest antialiased text-center" style={{ fontFamily: 'Inter, system-ui, sans-serif', fontFeatureSettings: '"tnum"' }}>
           {displayTime.toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',

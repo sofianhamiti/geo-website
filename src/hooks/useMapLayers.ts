@@ -20,6 +20,9 @@ interface LayerVisibility {
   showISS: boolean;
   showHurricanes: boolean;
   showEarthquakes: boolean;
+  showTrueColorEarth: boolean;
+  showRainRadar: boolean;
+  showAurora: boolean;
   nightStyle: NightStyleKey;
 }
 
@@ -28,8 +31,13 @@ interface LayerData {
   hurricaneLayers: any[];
   earthquakeLayers: any[];
   timezoneLayers: any[];
+  trueColorEarthLayers: any[];
+  rainRadarLayers: any[];
+  auroraLayers: any[];
   hurricaneLastUpdate: Date | null;
   earthquakeLastUpdate: Date | null;
+  rainRadarLastUpdate: Date | null;
+  auroraLastUpdate: Date | null;
 }
 
 export const useMapLayers = (
@@ -131,6 +139,46 @@ export const useMapLayers = (
     return layers;
   }, [currentTime, visibility.showTerminator, visibility.showNight, visibility.nightStyle, visibility.showCities, cities]);
 
+  // True-color Earth layers (below everything except basemap)
+  const trueColorEarthLayers = useMemo(() => {
+    if (visibility.showTrueColorEarth && layerData.trueColorEarthLayers.length > 0) {
+      return layerData.trueColorEarthLayers.map((layer: any) =>
+        layer.clone({ visible: true })
+      );
+    }
+    return [];
+  }, [visibility.showTrueColorEarth, layerData.trueColorEarthLayers]);
+
+  // Rain radar layers
+  const rainRadarLayers = useMemo(() => {
+    if (visibility.showRainRadar && layerData.rainRadarLayers.length > 0) {
+      return layerData.rainRadarLayers.map((layer: any) =>
+        layer.clone({
+          visible: true,
+          updateTriggers: {
+            data: layerData.rainRadarLastUpdate?.getTime() || 0,
+          },
+        })
+      );
+    }
+    return [];
+  }, [visibility.showRainRadar, layerData.rainRadarLayers, layerData.rainRadarLastUpdate]);
+
+  // Aurora forecast layers
+  const auroraLayers = useMemo(() => {
+    if (visibility.showAurora && layerData.auroraLayers.length > 0) {
+      return layerData.auroraLayers.map((layer: any) =>
+        layer.clone({
+          visible: true,
+          updateTriggers: {
+            image: layerData.auroraLastUpdate?.getTime() || 0,
+          },
+        })
+      );
+    }
+    return [];
+  }, [visibility.showAurora, layerData.auroraLayers, layerData.auroraLastUpdate]);
+
   // Earthquake layers (bottom-most data layer)
   const earthquakeLayers = useMemo(() => {
     const layers: any[] = [];
@@ -198,15 +246,18 @@ currentTime
   // Combine all layers (order matters - first layers render at bottom)
   const allLayers = useMemo(() => {
     return [
-      ...earthquakeLayers,      // Bottom-most data layer
+      ...trueColorEarthLayers,   // Bottom-most: satellite imagery overlay
+      ...rainRadarLayers,         // Rain radar above basemap
+      ...auroraLayers,            // Aurora above radar
+      ...earthquakeLayers,        // Earthquake data layer
       ...staticLayers,
-      ...unescoLayers,          // UNESCO layers (zoom-dependent)
+      ...unescoLayers,            // UNESCO layers (zoom-dependent)
       ...zoomDependentLayers,
       ...timeDependentLayers,
-      ...middleDataLayers,      // Middle data layers (hurricanes, planes)
-      ...issLayers              // Top-most data layer
+      ...middleDataLayers,        // Middle data layers (hurricanes, planes)
+      ...issLayers                // Top-most data layer
     ];
-  }, [earthquakeLayers, staticLayers, unescoLayers, zoomDependentLayers, timeDependentLayers, middleDataLayers, issLayers]);
+  }, [trueColorEarthLayers, rainRadarLayers, auroraLayers, earthquakeLayers, staticLayers, unescoLayers, zoomDependentLayers, timeDependentLayers, middleDataLayers, issLayers]);
 
   return allLayers;
 };
