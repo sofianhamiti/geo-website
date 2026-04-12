@@ -103,22 +103,46 @@ export class RainRadarManager extends BaseDataManager<RainRadarData> {
   }
 }
 
+// ── Tile fetcher — clamp z to RainViewer's max (7) ─────────────────
+// RainViewer returns an error-text PNG for z >= 8.  Instead of relying
+// on deck.gl's overzoom behaviour (which is unreliable with 6 stacked
+// animated TileLayers), we let deck.gl request tiles at any z the map
+// needs and silently clamp the URL to z=7.  The BitmapLayer stretches
+// the image to the tile's geographic bounds, so it looks upscaled.
+
+const RAIN_MAX_NATIVE_ZOOM = CONFIG.rainRadar.maxZoom; // 7
+
+function makeRainTileFetcher(host: string, framePath: string) {
+  return async (props: any) => {
+    const { index, signal } = props;
+    const z = Math.min(index.z, RAIN_MAX_NATIVE_ZOOM);
+
+    // When overzoomed, map the requested x/y back to the clamped z
+    const dz = index.z - z;
+    const x = index.x >> dz;
+    const y = index.y >> dz;
+
+    const url = `${host}${framePath}/256/${z}/${x}/${y}/6/1_1.png`;
+    const res = await fetch(url, { signal });
+    if (signal?.aborted) return null;
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await createImageBitmap(blob);
+  };
+}
+
 // ── Layer factory ────────────────────────────────────────────────────
 
 export function createRainRadarLayers(): Layer[] {
   const { frames, host, error } = rainRadarCache;
   if (error || frames.length === 0) return [];
 
-  // Create one TileLayer per frame — all stacked, animation loop controls opacity.
-  // maxZoom caps tile fetching at z7 (RainViewer's limit); beyond that, deck.gl
-  // upscales z7 tiles automatically.  maxCacheSize is raised because 6 animated
-  // frames each maintain their own tile cache.
   return frames.map((frame, i) =>
     new TileLayer({
       id: `${CONFIG.layerIds.rainRadar}-${i}`,
-      data: `${host}${frame.path}/256/{z}/{x}/{y}/6/1_1.png`,
+      getTileData: makeRainTileFetcher(host, frame.path),
       minZoom: 0,
-      maxZoom: CONFIG.rainRadar.maxZoom,
+      maxZoom: 8,
       tileSize: CONFIG.rainRadar.tileSize,
       refinementStrategy: 'best-available',
       maxCacheSize: 150,
