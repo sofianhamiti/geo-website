@@ -50,7 +50,7 @@ export interface MapState {
 
   // Night visualization
   showNight: boolean;
-  nightStyle: 'off' | 'shadow' | 'masked';
+  nightStyle: 'off' | 'masked';
 
   // Timezone layers
   timezoneLayers: any[];
@@ -108,7 +108,7 @@ export interface MapState {
 
   setProjection: (projection: 'mercator' | 'globe') => void;
   toggleNight: () => void;
-  setNightStyle: (style: 'off' | 'shadow' | 'masked') => void;
+  setNightStyle: (style: 'off' | 'masked') => void;
 
   // Timezone actions
   setTimezoneLayers: (layers: any[]) => void;
@@ -149,8 +149,8 @@ export const useMapStore = create<MapState>((set, get) => ({
   isEarthquakesLoading: false,
   earthquakeStyle: 'current' as 'current' | 'A' | 'B' | 'C',
   projection: 'mercator' as 'mercator' | 'globe',
-  showNight: true,
-  nightStyle: 'shadow' as 'off' | 'shadow' | 'masked',
+  showNight: false,
+  nightStyle: 'off' as 'off' | 'masked',
   timezoneLayers: [],
   isMenuOpen: false,
   currentTime: new Date(),

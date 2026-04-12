@@ -157,12 +157,6 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
     { key: 'arcgis', name: 'Satellite Imagery', icon: <Globe className="w-5 h-5 text-green-400" /> },
   ];
 
-  const nightStyles: { key: NightStyleKey; label: string }[] = [
-    { key: 'off', label: 'Off' },
-    { key: 'shadow', label: 'Shadow' },
-    { key: 'masked', label: 'Earth at Night' },
-  ];
-
   return (
     <>
       {/* Menu Toggle Button */}
@@ -285,23 +279,21 @@ export const MapControlPanel: React.FC<MapControlPanelProps> = ({
                   </div>
                 </div>
 
-                {/* Night Style Selector */}
-                <div className="bg-slate-800/30 rounded-xl p-5 space-y-4">
-                  <span className="text-sm font-medium text-slate-400">Night Style</span>
-                  <div className="flex bg-[#0f172a] rounded-xl p-1 gap-1">
-                    {nightStyles.map(ns => (
-                      <button
-                        key={ns.key}
-                        onClick={() => onSetNightStyle(ns.key)}
-                        className={`flex-1 py-2.5 px-3 rounded-lg text-[13px] font-medium transition-all ${
-                          nightStyle === ns.key
-                            ? 'bg-indigo-500/20 text-violet-300 ring-1 ring-indigo-400/30'
-                            : 'text-slate-500 hover:text-slate-400'
-                        }`}
-                      >
-                        {ns.label}
-                      </button>
-                    ))}
+                {/* Earth at Night */}
+                <div className="bg-slate-800/30 rounded-xl p-5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Globe className="w-5 h-5 text-indigo-400" />
+                      <span className="text-[15px] font-medium text-blue-100">Earth at Night</span>
+                    </div>
+                    <Switch checked={nightStyle === 'masked'} onCheckedChange={() => onSetNightStyle(nightStyle === 'masked' ? 'off' : 'masked')} />
+                  </div>
+                  <p className="text-[13px] text-slate-500 pl-8">NASA city lights on night side</p>
+                  <div className="flex items-center gap-2 pl-8">
+                    <RefreshCw className="w-3 h-3 text-teal-300/30" />
+                    <span className="text-[11px] text-teal-300/30">Every 10s</span>
+                    <span className="text-[11px] text-slate-600/50">·</span>
+                    <span className="text-[11px] text-slate-600/50">NASA VIIRS</span>
                   </div>
                 </div>
               </div>

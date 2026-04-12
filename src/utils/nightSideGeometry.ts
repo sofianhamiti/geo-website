@@ -21,7 +21,7 @@ const TO_DEG = 180 / Math.PI;
 /**
  * Compute the subsolar point (where the sun is directly overhead).
  */
-function getSubsolarPoint(date: Date): [number, number] {
+export function getSubsolarPoint(date: Date): [number, number] {
   const equator = Equator(Body.Sun, date, new Observer(0, 0, 0), true, true);
   const gst = SiderealTime(date);
 

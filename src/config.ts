@@ -7,8 +7,8 @@ export const CONFIG = {
   map: {
     center: [0, 20] as [number, number],
     zoom: {
-      default: 2,
-      min: 2,
+      default: 1.5,
+      min: 1,
       max: 8,
     },
     projection: 'mercator' as const,
