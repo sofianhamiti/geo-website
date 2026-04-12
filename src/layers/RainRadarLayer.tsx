@@ -109,7 +109,10 @@ export function createRainRadarLayers(): Layer[] {
   const { frames, host, error } = rainRadarCache;
   if (error || frames.length === 0) return [];
 
-  // Create one TileLayer per frame — all stacked, animation loop controls opacity
+  // Create one TileLayer per frame — all stacked, animation loop controls opacity.
+  // maxZoom caps tile fetching at z7 (RainViewer's limit); beyond that, deck.gl
+  // upscales z7 tiles automatically.  maxCacheSize is raised because 6 animated
+  // frames each maintain their own tile cache.
   return frames.map((frame, i) =>
     new TileLayer({
       id: `${CONFIG.layerIds.rainRadar}-${i}`,
@@ -118,6 +121,7 @@ export function createRainRadarLayers(): Layer[] {
       maxZoom: CONFIG.rainRadar.maxZoom,
       tileSize: CONFIG.rainRadar.tileSize,
       refinementStrategy: 'best-available',
+      maxCacheSize: 150,
       opacity: i === 0 ? CONFIG.rainRadar.opacity : 0,
       renderSubLayers: (props: any) => {
         const { boundingBox } = props.tile;
