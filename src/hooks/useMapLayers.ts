@@ -153,16 +153,11 @@ export const useMapLayers = (
   const rainRadarLayers = useMemo(() => {
     if (visibility.showRainRadar && layerData.rainRadarLayers.length > 0) {
       return layerData.rainRadarLayers.map((layer: any) =>
-        layer.clone({
-          visible: true,
-          updateTriggers: {
-            data: layerData.rainRadarLastUpdate?.getTime() || 0,
-          },
-        })
+        layer.clone({ visible: true })
       );
     }
     return [];
-  }, [visibility.showRainRadar, layerData.rainRadarLayers, layerData.rainRadarLastUpdate]);
+  }, [visibility.showRainRadar, layerData.rainRadarLayers]);
 
   // Aurora forecast layers
   const auroraLayers = useMemo(() => {
