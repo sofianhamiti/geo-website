@@ -210,12 +210,20 @@ const Map: React.FC = () => {
       // Preserve animation-driven state so React re-renders don't flash stale values
       const hcAngle = (performance.now() * 360 / 10000) % 360;
 
-      // Get current rain radar opacities from the overlay (set by animation loop)
+      // Snapshot current animation state from the overlay (set by animation loop)
       const currentOverlayLayers: any[] = overlay._props?.layers || [];
       const rrOpacityMap: Record<string, number> = {};
+      const eqAnimState: Record<string, { radiusScale: number; opacity: number }> = {};
       for (const l of currentOverlayLayers) {
         if (l.id?.startsWith('rain-radar-tiles-')) {
           rrOpacityMap[l.id] = l.props?.opacity ?? 0;
+        }
+        const eqMatch = l.id?.match(/^earthquake-pulse-ring-(\d)$/);
+        if (eqMatch) {
+          eqAnimState[l.id] = {
+            radiusScale: l.props?.radiusScale ?? 1,
+            opacity: l.props?.opacity ?? 0,
+          };
         }
       }
 
@@ -226,6 +234,10 @@ const Map: React.FC = () => {
         // Preserve rain radar frame opacities from animation loop
         if (layer.id?.startsWith('rain-radar-tiles-') && layer.id in rrOpacityMap) {
           return layer.clone({ opacity: rrOpacityMap[layer.id] });
+        }
+        // Preserve earthquake pulse ring animation state
+        if (layer.id in eqAnimState) {
+          return layer.clone(eqAnimState[layer.id]);
         }
         return layer;
       });
