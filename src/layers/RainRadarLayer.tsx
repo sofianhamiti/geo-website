@@ -1,8 +1,12 @@
 /**
  * Rain Radar Layer — RainViewer precipitation radar
- * Animates the last 6 radar frames (~1 hour) as stacked TileLayers.
- * Only the active frame has opacity > 0; the rest are hidden but cached.
+ *
+ * Shows the most recent radar frame as a single TileLayer.
  * Data refreshes every 10 minutes when new frames become available.
+ *
+ * Uses a single TileLayer to keep tile requests within RainViewer's
+ * CDN rate limits (6 stacked layers caused 6× requests → rate-limit
+ * failures and CORS errors at higher zoom levels).
  */
 
 import { TileLayer } from '@deck.gl/geo-layers';
@@ -70,7 +74,6 @@ async function updateRainRadarData(): Promise<void> {
       return;
     }
 
-    // Take the last FRAME_COUNT frames
     const frames = past.slice(-FRAME_COUNT).map(f => ({
       path: f.path,
       time: f.time,
@@ -109,19 +112,20 @@ export function createRainRadarLayers(): Layer[] {
   const { frames, host, error } = rainRadarCache;
   if (error || frames.length === 0) return [];
 
-  // RainViewer only serves tiles up to z7. We set maxZoom to match so
-  // deck.gl never requests higher zoom tiles (which return error PNGs).
-  // The map's own maxZoom should also be ≤ 7 to avoid blank areas.
-  return frames.map((frame, i) =>
+  // Use the most recent radar frame
+  const latestFrame = frames[frames.length - 1];
+
+  return [
     new TileLayer({
-      id: `${CONFIG.layerIds.rainRadar}-${i}`,
-      data: `${host}${frame.path}/256/{z}/{x}/{y}/6/1_1.png`,
+      id: CONFIG.layerIds.rainRadar,
+      data: `${host}${latestFrame.path}/256/{z}/{x}/{y}/6/1_1.png`,
       minZoom: 0,
       maxZoom: CONFIG.rainRadar.maxZoom,
       tileSize: CONFIG.rainRadar.tileSize,
       refinementStrategy: 'best-available',
       maxCacheSize: 150,
-      opacity: i === 0 ? CONFIG.rainRadar.opacity : 0,
+      opacity: CONFIG.rainRadar.opacity,
+
       renderSubLayers: (props: any) => {
         const { boundingBox } = props.tile;
         const [west, south] = boundingBox[0];
@@ -134,7 +138,8 @@ export function createRainRadarLayers(): Layer[] {
           parameters: { depthTest: false },
         });
       },
+
       pickable: false,
     }),
-  );
+  ];
 }
