@@ -84,7 +84,7 @@ export const CONFIG = {
     iss: {
       // Livestream Configuration
       streams: [
-        { id: 'FuuC4dpSQ1M', label: 'HD Views' },
+        { id: 'awQzjn72bI0', label: 'HD Views' },
         { id: 'uwXgcTc8oY8', label: 'Live Video' },
       ],
 
